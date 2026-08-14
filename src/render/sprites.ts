@@ -1,10 +1,10 @@
 /**
- * Procedural pixel-art sprites for the Permafrost theme.
+ * Procedural pixel-art sprites for the medieval-fantasy theme.
  *
  * Each sprite is a small character grid baked once to an offscreen canvas at
  * startup; draws scale the baked canvas with image smoothing off for a crisp
  * chunky-pixel look. Hot/cold variants exist so the renderer can crossfade
- * entities between their thawed and frozen appearance as timeScale moves.
+ * entities between their living and time-held appearance as timeScale moves.
  *
  * Render-only: nothing here reads or writes sim state.
  */
@@ -21,41 +21,69 @@ interface SpriteDef {
 /** Device pixels per grid cell when baking. */
 const CELL = 4;
 
-// The hearth-spirit: a bone shell around a burning (or frozen) core.
-const PLAYER_GRID = [
-  "...ooooooo...",
-  "..obbbbbbbo..",
-  ".obbbbbbbbbo.",
-  "obbbbcccbbbbo",
-  "obbbcccccbbbo",
-  "obbccXXXccbbo",
-  "obbccXXXccbbo",
-  "obbccXXXccbbo",
-  "obbbcccccbbbo",
-  "obbbbcccbbbbo",
-  ".obbbbbbbbbo.",
-  "..obbbbbbbo..",
-  "...ooooooo...",
+// The player: a knight — plumed helm, visor slit, a burning heart in the cuirass.
+const KNIGHT_GRID = [
+  "......p......",
+  ".....ppp.....",
+  "....hhhhh....",
+  "...hhhhhhh...",
+  "..hhhXXXhhh..",
+  "..hhhhhhhhh..",
+  "..aaacccaaa..",
+  "..aacCCCcaa..",
+  "..aacCCCcaa..",
+  "..aaacccaaa..",
+  "...aaaaaaa...",
+  "....aa.aa....",
 ] as const;
 
-// Ice-shard construct: a faceted diamond crystal with a glinting core.
-const SHARD_GRID = [
-  "......o......",
-  ".....ofo.....",
-  "....offfo....",
-  "...offcffo...",
-  "..offcccffo..",
-  ".offcccccffo.",
-  "offccXXXccffo",
-  ".offcccccffo.",
-  "..offcccffo..",
-  "...offcffo...",
-  "....offfo....",
-  ".....ofo.....",
-  "......o......",
+// Mage: wide-brimmed pointed hat, glowing eyes, robe with a focus gem.
+const MAGE_GRID = [
+  "......h......",
+  ".....hhh.....",
+  ".....hhh.....",
+  "....hhhhh....",
+  "...hhhhhhh...",
+  "..hhhhhhhhh..",
+  "....fXfXf....",
+  "....fffff....",
+  "...rrrrrrr...",
+  "..rrrcCcrrr..",
+  "..rrrrrrrrr..",
+  "...rr...rr...",
 ] as const;
 
-// Player shot: a hot ember bolt.
+// Dragon: raised wings, horned head, a furnace glowing through the belly scales.
+const DRAGON_GRID = [
+  "w...........w",
+  "ww.........ww",
+  "www..bbb..www",
+  "wwwwbbbbbwwww",
+  ".wwbbXbXbbww.",
+  "..wbbbbbbbw..",
+  "...bbFFFbb...",
+  "....bbFbb....",
+  ".....bbb.....",
+  "......b......",
+] as const;
+
+// Priest: mitre, vestments, and a tall glowing cross on the chest.
+const PRIEST_GRID = [
+  ".....mmm.....",
+  "....mmmmm....",
+  "....mmmmm....",
+  "....fXfXf....",
+  "....fffff....",
+  "...rrrrrrr...",
+  "..rrrrCrrrr..",
+  "..rrrCCCrrr..",
+  "..rrrrCrrrr..",
+  "..rrrrCrrrr..",
+  "..rrrrrrrrr..",
+  "...rrrrrrr...",
+] as const;
+
+// Player shot: a blessed steel quarrel with a gilt core.
 const BOLT_GRID = [
   "..eee..",
   ".eEEEe.",
@@ -66,7 +94,7 @@ const BOLT_GRID = [
   "..eee..",
 ] as const;
 
-// Enemy shot: a frost orb when frozen, blood-warm while time flows.
+// Enemy shot: dragonfire while time flows, an arcane stasis orb while held.
 const ORB_GRID = [
   "...ooo...",
   ".ooCCCoo.",
@@ -80,40 +108,60 @@ const ORB_GRID = [
 ] as const;
 
 const DEFS = {
-  playerHot: {
-    grid: PLAYER_GRID,
+  knightHot: {
+    grid: KNIGHT_GRID,
     scale: 2.4,
-    palette: { o: "rgba(20,16,14,0.55)", b: "#e8e4da", c: "#e0622e", X: "#ffc48a" },
+    palette: { p: "#c2453c", h: "#c7cdd9", X: "#ffd9a8", a: "#8a92a5", c: "#e8b84b", C: "#fff2c4" },
   },
-  playerCold: {
-    grid: PLAYER_GRID,
+  knightCold: {
+    grid: KNIGHT_GRID,
     scale: 2.4,
-    palette: { o: "rgba(12,16,22,0.55)", b: "#e8e4da", c: "#5e8aa3", X: "#c6e4f2" },
+    palette: { p: "#6b5a82", h: "#9aa3b8", X: "#cdbdf0", a: "#707a90", c: "#8f7fd0", C: "#d9ccf5" },
   },
-  shardHot: {
-    grid: SHARD_GRID,
-    scale: 2.3,
-    palette: { o: "rgba(232,228,218,0.5)", f: "#c2453c", c: "#a13029", X: "#ffb3a8" },
+  mageHot: {
+    grid: MAGE_GRID,
+    scale: 2.4,
+    palette: { h: "#5a3d8f", f: "#e8d5b8", X: "#c9a8ff", r: "#3f2f66", c: "#8f5fd0", C: "#e0ccff" },
   },
-  shardCold: {
-    grid: SHARD_GRID,
-    scale: 2.3,
-    palette: { o: "rgba(232,228,218,0.5)", f: "#7d95a6", c: "#5f7889", X: "#d6ecf7" },
+  mageCold: {
+    grid: MAGE_GRID,
+    scale: 2.4,
+    palette: { h: "#4a5570", f: "#c6cdda", X: "#d6ecf7", r: "#333c52", c: "#5f7889", C: "#d6ecf7" },
   },
-  boltEmber: {
+  dragonHot: {
+    grid: DRAGON_GRID,
+    scale: 2.7,
+    palette: { w: "#6e2a22", b: "#a13a2c", X: "#ffd9a8", F: "#ff9a4d" },
+  },
+  dragonCold: {
+    grid: DRAGON_GRID,
+    scale: 2.7,
+    palette: { w: "#3f4a63", b: "#566178", X: "#d6ecf7", F: "#8f9fbd" },
+  },
+  priestHot: {
+    grid: PRIEST_GRID,
+    scale: 2.4,
+    palette: { m: "#e8e0ce", f: "#d9b891", X: "#ffd9a8", r: "#6b5a3f", C: "#ffcf5e" },
+  },
+  priestCold: {
+    grid: PRIEST_GRID,
+    scale: 2.4,
+    palette: { m: "#b9c1cf", f: "#aab3c2", X: "#d6ecf7", r: "#454e60", C: "#9fb8d9" },
+  },
+  boltSteel: {
     grid: BOLT_GRID,
     scale: 3.4,
-    palette: { e: "#c2532a", E: "#ff7a3d", X: "#ffd9a8" },
+    palette: { e: "#8a92a5", E: "#d9dde8", X: "#fff2c4" },
   },
-  orbBlood: {
+  orbFire: {
     grid: ORB_GRID,
     scale: 2.6,
-    palette: { o: "rgba(232,68,58,0.4)", C: "#b3352d", X: "#e8443a" },
+    palette: { o: "rgba(255,122,61,0.4)", C: "#c2532a", X: "#ff9a4d" },
   },
-  orbFrost: {
+  orbArcane: {
     grid: ORB_GRID,
     scale: 2.6,
-    palette: { o: "rgba(169,207,224,0.4)", C: "#7fa8bf", X: "#a9cfe0" },
+    palette: { o: "rgba(159,143,208,0.4)", C: "#6f63a8", X: "#b3a5e8" },
   },
 } satisfies Record<string, SpriteDef>;
 

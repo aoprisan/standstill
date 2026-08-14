@@ -40,14 +40,14 @@ export const UPGRADES: UpgradeDef[] = [
   },
   {
     id: "velocity",
-    name: "Ember Velocity",
+    name: "Dragonfire Bolts",
     description: "Your bullets fly 30% faster.",
     maxStacks: 3,
     apply: { bulletSpeedMul: 1.3 },
   },
   {
     id: "vitality",
-    name: "Cold Blood",
+    name: "Priest's Blessing",
     description: "+1 max heart, and heal it.",
     maxStacks: 3,
     apply: { maxHpAdd: 1 },

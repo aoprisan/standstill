@@ -3,12 +3,12 @@
  * Visual randomness/time here is real-time and unseeded — outside the
  * deterministic boundary by design.
  *
- * Theme: Permafrost. A frozen arena floor with buried ember fissures that
- * glow while time flows; pixel-art sprites crossfade between their thawed
- * (hot) and frozen (cold) variants as timeScale moves.
+ * Theme: medieval fantasy. A ruined castle hall whose floor-runes glow
+ * while time flows; pixel-art mages, dragons and priests crossfade between
+ * their living (hot) and time-held (cold) variants as timeScale moves.
  */
 import type { GameState, SimEvent } from "../sim/types";
-import { SpriteAtlas } from "./sprites";
+import { SpriteAtlas, type SpriteKey } from "./sprites";
 import { Terrain } from "./terrain";
 
 interface Particle {
@@ -21,7 +21,7 @@ interface Particle {
   color: string;
 }
 
-/** Ambient atmosphere: ember motes rise while time flows, frost falls while frozen. */
+/** Ambient atmosphere: gold sparks rise off the runes while time flows, arcane dust falls while held. */
 interface Mote {
   x: number;
   y: number;
@@ -29,17 +29,29 @@ interface Mote {
   vy: number;
   life: number;
   t: number;
-  kind: "ember" | "frost";
+  kind: "spark" | "dust";
 }
 
 const COLORS = {
-  bg: "#0b0d12",
-  ice: "#8fb4c9",
-  iceBullet: "#a9cfe0",
-  ember: "#ff7a3d",
+  bg: "#0e0b10",
+  arcane: "#9b8fd0",
+  arcaneBullet: "#b3a5e8",
+  gold: "#e8b84b",
+  fire: "#ff9a4d",
   blood: "#e8443a",
-  bone: "#e8e4da",
+  parchment: "#e8e0ce",
 };
+
+/**
+ * Hot/cold sprite pair per enemy, keyed on stable id so a given enemy keeps
+ * its face for its whole life. Cosmetic variety only — when fire-pattern
+ * archetypes land (roadmap 3), key on e.archetype instead.
+ */
+const ENEMY_SPRITES: [cold: SpriteKey, hot: SpriteKey][] = [
+  ["mageCold", "mageHot"],
+  ["dragonCold", "dragonHot"],
+  ["priestCold", "priestHot"],
+];
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -88,10 +100,10 @@ export class Renderer {
     for (const ev of events) {
       switch (ev.kind) {
         case "enemyHit":
-          this.burst(ev.x, ev.y, COLORS.ember, 5, 160);
+          this.burst(ev.x, ev.y, COLORS.fire, 5, 160);
           break;
         case "enemyDied":
-          this.burst(ev.x, ev.y, COLORS.ember, 22, 260);
+          this.burst(ev.x, ev.y, COLORS.gold, 22, 260);
           this.shake = Math.min(this.shake + 5, 10);
           break;
         case "playerHit":
@@ -120,8 +132,8 @@ export class Renderer {
   }
 
   private updateAtmosphere(ts: number, realDt: number): void {
-    // Ember motes lift off the fissures while time flows…
-    const sites = this.terrain.fissurePoints;
+    // Gold sparks lift off the rune circles while time flows…
+    const sites = this.terrain.runePoints;
     if (ts > 0.4 && sites.length > 0 && Math.random() < realDt * 8 * ts) {
       const p = sites[(Math.random() * sites.length) | 0]!;
       this.motes.push({
@@ -131,10 +143,10 @@ export class Renderer {
         vy: -14 - Math.random() * 22,
         life: 1.2 + Math.random() * 1.2,
         t: 0,
-        kind: "ember",
+        kind: "spark",
       });
     }
-    // …and frost dust drifts down while the world is frozen.
+    // …and pale arcane dust sifts down while the world is held.
     if (ts < 0.5 && Math.random() < realDt * 10 * (1 - ts)) {
       this.motes.push({
         x: Math.random() * this.W,
@@ -143,7 +155,7 @@ export class Renderer {
         vy: 22 + Math.random() * 26,
         life: 3 + Math.random() * 3,
         t: 0,
-        kind: "frost",
+        kind: "dust",
       });
     }
     for (let i = this.motes.length - 1; i >= 0; i--) {
@@ -153,8 +165,8 @@ export class Renderer {
         this.motes.splice(i, 1);
         continue;
       }
-      // Ember motes belong to the world: they freeze with it. Frost is ambient.
-      const flow = m.kind === "ember" ? ts : 1;
+      // Sparks belong to the world: they freeze with it. The dust is ambient.
+      const flow = m.kind === "spark" ? ts : 1;
       m.x += m.vx * realDt * flow;
       m.y += m.vy * realDt * flow;
     }
@@ -189,37 +201,37 @@ export class Renderer {
       ctx.translate((Math.random() * 2 - 1) * this.shake * 0.4, (Math.random() * 2 - 1) * this.shake * 0.4);
     }
 
-    // frozen arena floor
+    // castle-hall arena floor
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(-20, -20, W + 40, H + 40);
     this.terrain.drawBase(ctx, W, H);
     if (coldness > 0.02) {
-      ctx.fillStyle = `rgba(66,95,116,${0.1 * coldness})`;
+      ctx.fillStyle = `rgba(84,72,120,${0.1 * coldness})`;
       ctx.fillRect(-20, -20, W + 40, H + 40);
     }
 
-    // buried heat: fissures glow with time flow, flicker like coals
+    // carved magic: rune circles glow with time flow, flicker like candleflame
     const flicker = 0.9 + 0.1 * Math.sin(performance.now() * 0.013);
-    this.terrain.drawEmbers(ctx, W, H, 0.12 + 0.75 * ts * flicker);
+    this.terrain.drawRunes(ctx, W, H, 0.12 + 0.75 * ts * flicker);
 
     // ambient motes
     for (const m of this.motes) {
       const fade = 1 - m.t / m.life;
-      if (m.kind === "ember") {
+      if (m.kind === "spark") {
         ctx.globalAlpha = fade * 0.8;
-        ctx.fillStyle = COLORS.ember;
+        ctx.fillStyle = COLORS.gold;
         ctx.fillRect(m.x - 1, m.y - 1, 2, 2);
       } else {
         ctx.globalAlpha = fade * 0.5;
-        ctx.fillStyle = COLORS.iceBullet;
+        ctx.fillStyle = COLORS.arcaneBullet;
         ctx.fillRect(m.x - 1, m.y - 1, 1.5, 1.5);
       }
     }
     ctx.globalAlpha = 1;
 
-    // frozen trajectory ghosts
+    // held-time trajectory ghosts
     if (coldness > 0.3) {
-      ctx.strokeStyle = `rgba(143,180,201,${0.35 * coldness})`;
+      ctx.strokeStyle = `rgba(155,143,208,${0.35 * coldness})`;
       ctx.setLineDash([3, 6]);
       ctx.beginPath();
       for (const b of s.eBullets) {
@@ -231,8 +243,8 @@ export class Renderer {
     }
 
     // enemy bullets (binary hot/cold swap — these are the hot path)
-    const orbKey = ts > 0.5 ? "orbBlood" : "orbFrost";
-    const orbHalo = ts > 0.5 ? "rgba(232,68,58,0.35)" : "rgba(169,207,224,0.3)";
+    const orbKey = ts > 0.5 ? "orbFire" : "orbArcane";
+    const orbHalo = ts > 0.5 ? "rgba(255,122,61,0.35)" : "rgba(159,143,208,0.3)";
     ctx.strokeStyle = orbHalo;
     ctx.lineWidth = 1;
     for (const b of s.eBullets) {
@@ -244,16 +256,17 @@ export class Renderer {
 
     // player bullets
     for (const b of s.pBullets) {
-      this.atlas.draw(ctx, "boltEmber", b.x, b.y, b.r);
+      this.atlas.draw(ctx, "boltSteel", b.x, b.y, b.r);
     }
 
-    // enemies — ice-shard constructs, crossfading thawed over frozen
+    // enemies — mages, dragons and priests, crossfading living over held
     for (const e of s.enemies) {
       const rot = e.wob * 0.5;
-      this.atlas.draw(ctx, "shardCold", e.x, e.y, e.r, rot);
+      const [cold, hot] = ENEMY_SPRITES[e.id % ENEMY_SPRITES.length]!;
+      this.atlas.draw(ctx, cold, e.x, e.y, e.r, rot);
       if (ts > 0.02) {
         ctx.globalAlpha = ts;
-        this.atlas.draw(ctx, "shardHot", e.x, e.y, e.r, rot);
+        this.atlas.draw(ctx, hot, e.x, e.y, e.r, rot);
         ctx.globalAlpha = 1;
       }
     }
@@ -266,19 +279,19 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
 
-    // player — the hearth-spirit, core crossfading ember/ice
+    // player — the knight, heart-core crossfading gilt/arcane
     const blink = p.iframes > 0 && Math.floor(p.iframes * 12) % 2 === 0;
     if (!blink) {
-      this.atlas.draw(ctx, "playerCold", p.x, p.y, p.r);
+      this.atlas.draw(ctx, "knightCold", p.x, p.y, p.r);
       if (ts > 0.02) {
         ctx.globalAlpha = ts;
-        this.atlas.draw(ctx, "playerHot", p.x, p.y, p.r);
+        this.atlas.draw(ctx, "knightHot", p.x, p.y, p.r);
         ctx.globalAlpha = 1;
       }
       if (ts > 0.5 && s.phase === "playing") {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r + 6 + Math.sin(performance.now() * 0.01) * 2, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(255,122,61,0.5)";
+        ctx.strokeStyle = "rgba(232,184,75,0.5)";
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
@@ -291,8 +304,8 @@ export class Renderer {
 
     if (coldness > 0.05) {
       const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
-      vg.addColorStop(0, "rgba(143,180,201,0)");
-      vg.addColorStop(1, `rgba(70,100,125,${0.28 * coldness})`);
+      vg.addColorStop(0, "rgba(155,143,208,0)");
+      vg.addColorStop(1, `rgba(94,82,140,${0.28 * coldness})`);
       ctx.fillStyle = vg;
       ctx.fillRect(-20, -20, W + 40, H + 40);
     }
