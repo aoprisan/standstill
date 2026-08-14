@@ -41,6 +41,16 @@ export interface ThreaderTuning {
   hitR: number;
   /** How far a dodge stroke reaches, in ticks of travel. */
   stepTicks: number;
+  /**
+   * Hazard the policy will stand in rather than flee. Zero means "only fire
+   * when perfectly safe", which in dense waves means never — the bot freezes
+   * forever, kills nothing and never dies. Progress requires accepting risk.
+   */
+  risk: number;
+  /** Consecutive frozen ticks tolerated before forcing a stand. */
+  patience: number;
+  /** How long a forced stand lasts, so the decision actually buys fire time. */
+  standTicks: number;
 }
 
 /**
@@ -49,7 +59,14 @@ export interface ThreaderTuning {
  * that scored similarly on waves did so by freezing 80% of the time, which is
  * the bot gaming the harness rather than playing the game.
  */
-export const DEFAULT_TUNING: ThreaderTuning = { horizon: 1.0, hitR: 32, stepTicks: 28 };
+export const DEFAULT_TUNING: ThreaderTuning = {
+  horizon: 1.0,
+  hitR: 32,
+  stepTicks: 28,
+  risk: 0.35,
+  patience: 150,
+  standTicks: 45,
+};
 
 /** Standing inside a frozen bullet's lap is its own hazard — collision is live. */
 const TOUCH_R = 26;
@@ -68,6 +85,8 @@ const ENEMY_W = 0.6;
 const DIRS = 16;
 /** Close enough to count as arrived at a dodge target. */
 const ARRIVE_R = 8;
+/** Preference order for the draft, best first. Measured — see draftPick. */
+const DRAFT_ORDER = ["steal", "vitality", "rapid", "pierce", "fan", "velocity"];
 
 /**
  * Will anything actually hit a player standing at (x,y)? Solves each bullet's
@@ -136,12 +155,36 @@ export function makeThreader(k: ThreaderTuning = DEFAULT_TUNING): Policy {
   let tx = 0;
   let ty = 0;
   let committed = false;
+  let frozenTicks = 0;
+  let standing = 0;
 
   return {
     name: "threader",
 
     reset() {
       committed = false;
+      frozenTicks = 0;
+      standing = 0;
+    },
+
+    /**
+     * Draft order measured, not guessed: each upgrade was surveyed by forcing
+     * a threader to always take it (see git history). Ranking by median wave
+     * gave steal > vitality > rapid > pierce > fan > velocity. A competent
+     * player drafts on purpose, so the reference policy should too.
+     */
+    draftPick(_s, offered) {
+      let best = 0;
+      let bestRank = Number.MAX_SAFE_INTEGER;
+      for (let i = 0; i < offered.length; i++) {
+        const rank = DRAFT_ORDER.indexOf(offered[i]!);
+        const r = rank < 0 ? DRAFT_ORDER.length : rank;
+        if (r < bestRank) {
+          bestRank = r;
+          best = i;
+        }
+      }
+      return best;
     },
 
     decide(s) {
@@ -150,6 +193,22 @@ export function makeThreader(k: ThreaderTuning = DEFAULT_TUNING): Policy {
       // Invulnerable: bullets pass through us. Free damage — do not waste it.
       if (p.iframes > IFRAME_SAFE) {
         committed = false;
+        frozenTicks = 0;
+        return STILL;
+      }
+
+      // Committed to a stand: ride it out so the shots actually land.
+      if (standing > 0) {
+        standing--;
+        frozenTicks = 0;
+        return STILL;
+      }
+
+      // Dodging forever is survivable and scoreless. Force the decision.
+      if (frozenTicks > k.patience) {
+        committed = false;
+        frozenTicks = 0;
+        standing = k.standTicks;
         return STILL;
       }
 
@@ -166,7 +225,10 @@ export function makeThreader(k: ThreaderTuning = DEFAULT_TUNING): Policy {
         committed = false;
       }
 
-      if (here <= 0) return STILL;
+      if (here <= k.risk) {
+        frozenTicks = 0;
+        return STILL;
+      }
 
       let bestHazard = Infinity;
       let bestScore = Infinity;
@@ -191,7 +253,12 @@ export function makeThreader(k: ThreaderTuning = DEFAULT_TUNING): Policy {
       }
 
       // Nowhere better to be: take the hit and keep firing.
-      if (bestHazard >= here) return STILL;
+      if (bestHazard >= here) {
+        frozenTicks = 0;
+        return STILL;
+      }
+
+      frozenTicks++;
 
       tx = bcx;
       ty = bcy;

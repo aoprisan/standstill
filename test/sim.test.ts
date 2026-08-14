@@ -34,12 +34,25 @@ describe("the mechanic", () => {
     expect(s.player.x).toBeGreaterThan(x0);
   });
 
-  it("waves progress after clearing enemies", () => {
+  it("clearing a wave opens a draft, and the pick starts the next wave", () => {
     const s = createState(42, 400, 800);
     tick(s, STILL); // bootstraps wave 1
     expect(s.wave).toBe(1);
     s.enemies.length = 0; // simulate a clear
     for (let t = 0; t < 90; t++) tick(s, STILL);
+
+    // The world holds still and offers a choice rather than spawning straight on.
+    expect(s.phase).toBe("drafting");
+    expect(s.draft.length).toBeGreaterThan(0);
+    expect(s.wave).toBe(1);
+
+    // No pick, no progress: the draft waits indefinitely.
+    for (let t = 0; t < 120; t++) tick(s, STILL);
+    expect(s.phase).toBe("drafting");
+
+    tick(s, { ...STILL, select: 0 });
+    expect(s.phase).toBe("playing");
+    expect(s.taken.length).toBe(1);
     expect(s.wave).toBe(2);
     expect(s.enemies.length).toBeGreaterThan(0);
   });
@@ -50,7 +63,7 @@ describe("the mechanic", () => {
     s.player.hp = 1;
     s.player.iframes = 0;
     // drop a bullet on the player
-    s.eBullets.push({ x: s.player.x, y: s.player.y, vx: 0, vy: 0, r: 5 });
+    s.eBullets.push({ x: s.player.x, y: s.player.y, vx: 0, vy: 0, r: 5, pierce: 0, hitId: 0 });
     tick(s, STILL);
     expect(s.phase).toBe("dead");
     expect(s.events.some((e) => e.kind === "gameOver")).toBe(true);

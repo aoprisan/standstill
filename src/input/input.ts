@@ -30,6 +30,13 @@ export class InputSource {
   private dy = 0;
   private moveHeat = 0;
   private keys = new Set<string>();
+  /** Draft choice queued by the UI; consumed by the next frame() call. */
+  private pending = -1;
+
+  /** Queue a draft pick. Drained once, so a tap can never apply twice. */
+  select(index: number): void {
+    this.pending = index;
+  }
 
   attach(target: HTMLElement): void {
     target.addEventListener("pointerdown", (e) => {
@@ -76,6 +83,8 @@ export class InputSource {
     }
     const speed = Math.hypot(mx, my);
     this.moveHeat = stepMoveHeat(this.moveHeat, speed, DT);
-    return { mx, my, moving: this.moveHeat > MOVE_HEAT_ACTIVE };
+    const select = this.pending;
+    this.pending = -1;
+    return { mx, my, moving: this.moveHeat > MOVE_HEAT_ACTIVE, select };
   }
 }

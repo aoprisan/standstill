@@ -6,9 +6,12 @@ import { DT, type GameState, type InputFrame, type Enemy } from "./types";
 import { range } from "./rng";
 import { ENEMIES } from "../data/enemies";
 import { waveDef, WAVE_CLEAR_DELAY } from "../data/waves";
+import { applyUpgrade, DRAFT_SIZE, UPGRADE_BY_ID, UPGRADES } from "../data/upgrades";
 
 // Feel constants — tuned on device, change deliberately (see CLAUDE.md).
 const FREEZE_SNAP = 1 - Math.pow(0.0001, DT);
+/** Seconds of flowing time to reload one bullet-steal charge. */
+const STEAL_RECHARGE_S = 1.5;
 const DRAG_AMP = 1.15; // applied in input layer; documented here for reference
 void DRAG_AMP;
 
@@ -32,11 +35,20 @@ export function createState(seed: number, arenaW: number, arenaH: number): GameS
       fireCd: 0,
       fireCooldown: 0.22,
       bulletSpeed: 520,
+      spread: 0,
+      spreadGap: 0.16,
+      pierce: 0,
+      stealR: 14,
+      stealMax: 0,
+      stealCharge: 0,
+      stealRechargeT: 0,
     },
     enemies: [],
     eBullets: [],
     pBullets: [],
     nextEnemyId: 1,
+    draft: [],
+    taken: [],
     events: [],
   };
 }
@@ -114,10 +126,59 @@ function spawnWave(s: GameState, wave: number): void {
   s.events.push({ kind: "waveStarted", wave });
 }
 
+function stacksOf(s: GameState, id: string): number {
+  let n = 0;
+  for (const t of s.taken) if (t === id) n++;
+  return n;
+}
+
+/**
+ * Offer DRAFT_SIZE distinct upgrades, skipping any already at max stacks.
+ * Partial Fisher-Yates over the seeded PRNG, so a seed replays its own draft.
+ */
+function rollDraft(s: GameState): string[] {
+  const pool = UPGRADES.filter((u) => stacksOf(s, u.id) < u.maxStacks);
+  const out: string[] = [];
+  const n = Math.min(DRAFT_SIZE, pool.length);
+  for (let k = 0; k < n; k++) {
+    let v: number;
+    [v, s.rng] = range(s.rng, k, pool.length);
+    const j = Math.min(pool.length - 1, Math.floor(v));
+    const tmp = pool[k]!;
+    pool[k] = pool[j]!;
+    pool[j] = tmp;
+    out.push(pool[k]!.id);
+  }
+  return out;
+}
+
+/**
+ * Between waves the world holds still and the player chooses. Time is fully
+ * stopped here — no movement, no fire, no incoming — so the choice is never
+ * made under duress.
+ */
+function tickDraft(s: GameState, input: InputFrame): void {
+  const sel = input.select;
+  if (sel === undefined || sel < 0 || sel >= s.draft.length) return;
+  const def = UPGRADE_BY_ID[s.draft[sel]!];
+  if (def) {
+    applyUpgrade(s.player, def);
+    s.taken.push(def.id);
+    s.events.push({ kind: "upgradeTaken", id: def.id });
+  }
+  s.draft.length = 0;
+  s.phase = "playing";
+  spawnWave(s, s.wave + 1);
+}
+
 /** Advance the simulation by exactly one fixed step. */
 export function tick(s: GameState, input: InputFrame): void {
   s.events.length = 0;
-  if (s.phase !== "playing") return;
+  if (s.phase === "dead") return;
+  if (s.phase === "drafting") {
+    tickDraft(s, input);
+    return;
+  }
   s.tickCount++;
 
   const p = s.player;
@@ -150,14 +211,64 @@ export function tick(s: GameState, input: InputFrame): void {
     }
     if (best) {
       const a = interceptAngle(p.x, p.y, best, p.bulletSpeed);
+      const count = 1 + p.spread;
+      const half = (count - 1) / 2;
+      for (let i = 0; i < count; i++) {
+        const ang = a + (i - half) * p.spreadGap;
+        s.pBullets.push({
+          x: p.x,
+          y: p.y,
+          vx: Math.cos(ang) * p.bulletSpeed,
+          vy: Math.sin(ang) * p.bulletSpeed,
+          r: 4,
+          pierce: p.pierce,
+          hitId: 0,
+        });
+      }
+      p.fireCd = p.fireCooldown;
+    }
+  }
+
+  // -- bullet-steal: the freeze becomes offence, but only on credit.
+  //
+  // Charges are spent while frozen and reloaded ONLY while time flows, so the
+  // ability is paid for in the vulnerable state it rewards you for leaving.
+  // Without that loop it was strictly better to live on ice: freezing simply
+  // deleted every threat within reach, and the bots went 100% stall / 14% still
+  // — the mechanic inverted.
+  if (p.stealMax > 0 && ts > 0.5 && p.stealCharge < p.stealMax) {
+    p.stealRechargeT += DT * ts;
+    if (p.stealRechargeT >= STEAL_RECHARGE_S) {
+      p.stealRechargeT = 0;
+      p.stealCharge++;
+    }
+  }
+  if (p.stealMax > 0 && p.stealCharge > 0 && ts < 0.5) {
+    for (let i = s.eBullets.length - 1; i >= 0 && p.stealCharge > 0; i--) {
+      const b = s.eBullets[i]!;
+      if (dist2(b.x, b.y, p.x, p.y) >= p.stealR * p.stealR) continue;
+      p.stealCharge--;
+      s.eBullets.splice(i, 1);
+      let best: Enemy | null = null;
+      let bd = Infinity;
+      for (const e of s.enemies) {
+        const d = dist2(b.x, b.y, e.x, e.y);
+        if (d < bd) {
+          bd = d;
+          best = e;
+        }
+      }
+      const a = best ? interceptAngle(b.x, b.y, best, p.bulletSpeed) : -Math.PI / 2;
       s.pBullets.push({
-        x: p.x,
-        y: p.y,
+        x: b.x,
+        y: b.y,
         vx: Math.cos(a) * p.bulletSpeed,
         vy: Math.sin(a) * p.bulletSpeed,
-        r: 4,
+        r: b.r,
+        pierce: p.pierce,
+        hitId: 0,
       });
-      p.fireCd = p.fireCooldown;
+      s.events.push({ kind: "bulletStolen", x: b.x, y: b.y });
     }
   }
 
@@ -191,6 +302,8 @@ export function tick(s: GameState, input: InputFrame): void {
           vx: Math.cos(a) * proto.bulletSpeed,
           vy: Math.sin(a) * proto.bulletSpeed,
           r: proto.bulletR,
+          pierce: 0,
+          hitId: 0,
         });
       }
     }
@@ -208,14 +321,20 @@ export function tick(s: GameState, input: InputFrame): void {
     }
     for (let j = s.enemies.length - 1; j >= 0; j--) {
       const e = s.enemies[j]!;
+      if (e.id === b.hitId) continue; // already punched through this one
       const rr = b.r + e.r;
       if (dist2(b.x, b.y, e.x, e.y) < rr * rr) {
-        s.pBullets.splice(i, 1);
         e.hp--;
         s.events.push({ kind: "enemyHit", x: b.x, y: b.y });
         if (e.hp <= 0) {
           s.events.push({ kind: "enemyDied", x: e.x, y: e.y });
           s.enemies.splice(j, 1);
+        }
+        if (b.pierce > 0) {
+          b.pierce--;
+          b.hitId = e.id;
+        } else {
+          s.pBullets.splice(i, 1);
         }
         break;
       }
@@ -252,7 +371,13 @@ export function tick(s: GameState, input: InputFrame): void {
     s.waveClearT += DT;
     if (s.waveClearT > WAVE_CLEAR_DELAY) {
       s.waveClearT = 0;
-      spawnWave(s, s.wave + 1);
+      s.draft = rollDraft(s);
+      if (s.draft.length > 0) {
+        s.phase = "drafting";
+        s.events.push({ kind: "draftOffered", options: s.draft.slice() });
+      } else {
+        spawnWave(s, s.wave + 1);
+      }
     }
   }
 }

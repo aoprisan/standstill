@@ -8,6 +8,11 @@ export interface InputFrame {
   my: number;
   /** True while the player is considered moving (freezes the world). */
   moving: boolean;
+  /**
+   * Draft pick for this tick: an index into GameState.draft. Omitted or out of
+   * range means "no choice yet", which is the normal case on almost every tick.
+   */
+  select?: number;
 }
 
 export interface Player {
@@ -20,6 +25,17 @@ export interface Player {
   fireCd: number;
   fireCooldown: number;
   bulletSpeed: number;
+  /** Extra bullets per shot, fanned around the aim line. */
+  spread: number;
+  spreadGap: number;
+  /** Extra enemies each bullet passes through before dying. */
+  pierce: number;
+  /** Bullet-steal reach in px. Inert unless stealMax > 0. */
+  stealR: number;
+  /** Bullets stealable per freeze. Recharges only while time flows. */
+  stealMax: number;
+  stealCharge: number;
+  stealRechargeT: number;
 }
 
 export interface Enemy {
@@ -44,6 +60,10 @@ export interface Bullet {
   vx: number;
   vy: number;
   r: number;
+  /** Hits remaining after the first. Enemy bullets leave this at 0. */
+  pierce: number;
+  /** Last enemy id struck, so a piercing bullet can't re-hit the same body. */
+  hitId: number;
 }
 
 /** Render-only juice signals emitted by a tick. Cleared every tick. */
@@ -52,6 +72,9 @@ export type SimEvent =
   | { kind: "enemyHit"; x: number; y: number }
   | { kind: "enemyDied"; x: number; y: number }
   | { kind: "waveStarted"; wave: number }
+  | { kind: "draftOffered"; options: readonly string[] }
+  | { kind: "upgradeTaken"; id: string }
+  | { kind: "bulletStolen"; x: number; y: number }
   | { kind: "gameOver"; wave: number };
 
 export interface GameState {
@@ -60,7 +83,7 @@ export interface GameState {
   tickCount: number;
   arenaW: number;
   arenaH: number;
-  phase: "playing" | "dead";
+  phase: "playing" | "drafting" | "dead";
   wave: number;
   waveClearT: number;
   timeScale: number;
@@ -69,5 +92,9 @@ export interface GameState {
   eBullets: Bullet[];
   pBullets: Bullet[];
   nextEnemyId: number;
+  /** Upgrade ids on offer while phase === "drafting". Empty otherwise. */
+  draft: string[];
+  /** Upgrade ids taken this run, in order. Repeats mean stacks. */
+  taken: string[];
   events: SimEvent[];
 }

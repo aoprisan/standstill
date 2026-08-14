@@ -3,12 +3,14 @@ import { DT, type GameState } from "./sim/types";
 import { createState, tick } from "./sim/tick";
 import { InputSource } from "./input/input";
 import { Renderer } from "./render/render";
+import { UPGRADE_BY_ID } from "./data/upgrades";
 
 const canvas = document.getElementById("c") as HTMLCanvasElement;
 const hearts = document.getElementById("hearts")!;
 const waveLabel = document.getElementById("waveLabel")!;
 const timeState = document.getElementById("timeState")!;
 const overlay = document.getElementById("overlay")!;
+const draftEl = document.getElementById("draft")!;
 const startBtn = document.getElementById("startBtn")!;
 const title = overlay.querySelector("h1")!;
 const paras = overlay.querySelectorAll("p");
@@ -19,12 +21,45 @@ input.attach(canvas);
 
 let state: GameState | null = null;
 
+/** Render the offer. Time is stopped in this phase, so there is no clock on it. */
+function showDraft(options: readonly string[], taken: readonly string[]): void {
+  draftEl.replaceChildren(draftEl.firstElementChild!);
+  options.forEach((id, i) => {
+    const def = UPGRADE_BY_ID[id];
+    if (!def) return;
+    const held = taken.filter((t) => t === id).length;
+    const card = document.createElement("div");
+    card.className = "card";
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = def.name;
+    const desc = document.createElement("div");
+    desc.className = "desc";
+    desc.textContent = def.description;
+    card.append(name, desc);
+    if (held > 0) {
+      const st = document.createElement("div");
+      st.className = "stacks";
+      st.textContent = `held ${held}/${def.maxStacks}`;
+      card.append(st);
+    }
+    card.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      input.select(i);
+      draftEl.classList.add("hidden");
+    });
+    draftEl.append(card);
+  });
+  draftEl.classList.remove("hidden");
+}
+
 function start(): void {
   const { w, h } = renderer.size;
   // Daily-seed-ready: swap for a date-derived seed when leaderboards land.
   const seed = (Math.random() * 0xffffffff) >>> 0;
   state = createState(seed, w, h);
   overlay.classList.add("hidden");
+  draftEl.classList.add("hidden");
   hearts.textContent = "\u2665 \u2665 \u2665";
 }
 
@@ -34,6 +69,7 @@ overlay.addEventListener("pointerdown", () => {
 });
 
 function onGameOver(wave: number): void {
+  draftEl.classList.add("hidden");
   title.innerHTML = '<span class="hot">FELLED</span>';
   if (paras[0]) paras[0].innerHTML = `You survived to <b>wave ${wave}</b>.<br><br>Stillness is the commitment.`;
   if (paras[1]) paras[1].textContent = "";
@@ -50,16 +86,17 @@ function frame(now: number): void {
   lastT = now;
   if (elapsed > 0.1) elapsed = 0.1; // tab-away guard
 
-  if (state && state.phase === "playing") {
+  if (state && state.phase !== "dead") {
     acc += elapsed;
     while (acc >= DT) {
       tick(state, input.frame());
       renderer.consume(state.events);
       for (const ev of state.events) {
         if (ev.kind === "waveStarted") waveLabel.textContent = `WAVE ${ev.wave}`;
-        if (ev.kind === "playerHit") {
-          hearts.textContent = "\u2665 \u2665 \u2665".slice(0, Math.max(0, state.player.hp * 2 - 1));
+        if (ev.kind === "playerHit" || ev.kind === "upgradeTaken") {
+          hearts.textContent = "\u2665 ".repeat(Math.max(0, state.player.hp)).trim();
         }
+        if (ev.kind === "draftOffered") showDraft(ev.options, state.taken);
         if (ev.kind === "gameOver") onGameOver(ev.wave);
       }
       acc -= DT;

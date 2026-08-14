@@ -31,6 +31,12 @@ export interface Policy {
    */
   reset?(): void;
   decide(s: Readonly<GameState>, t: number): Intent;
+  /**
+   * Which upgrade to take, as an index into `offered`. Defaults to the first
+   * on offer — a deliberately dumb baseline, so any policy that beats it is
+   * beating it on draft judgement and not on luck.
+   */
+  draftPick?(s: Readonly<GameState>, offered: readonly string[]): number;
 }
 
 export interface RunOptions {
@@ -48,8 +54,10 @@ export interface RunResult {
   /** False means the policy hit maxTicks alive — a stall, not a win. */
   died: boolean;
   hpLeft: number;
-  /** Fraction of ticks spent not-moving, i.e. actually committed to stillness. */
+  /** Fraction of playing ticks spent not-moving, i.e. committed to stillness. */
   stillFraction: number;
+  /** Upgrades taken, in order. Repeats are stacks. */
+  taken: string[];
 }
 
 const DEFAULTS = { arenaW: 400, arenaH: 800, maxTicks: 60 * 60 * 10 };
@@ -62,10 +70,20 @@ export function runGame(policy: Policy, seed: number, opts: RunOptions = {}): Ru
 
   let heat = 0;
   let stillTicks = 0;
+  let playTicks = 0;
   let t = 0;
   let maxWave = 0;
 
-  for (; t < maxTicks && s.phase === "playing"; t++) {
+  for (; t < maxTicks && s.phase !== "dead"; t++) {
+    // Between waves the world is paused for the draft. Resolve the choice and
+    // move on; these ticks are not play, so they do not count toward stillness.
+    if (s.phase === "drafting") {
+      const pick = policy.draftPick ? policy.draftPick(s, s.draft) : 0;
+      tick(s, { mx: 0, my: 0, moving: false, select: pick });
+      continue;
+    }
+
+    playTicks++;
     const intent = policy.decide(s, t);
 
     // Clamp to thumb speed, then run it through the real move-heat curve.
@@ -89,7 +107,8 @@ export function runGame(policy: Policy, seed: number, opts: RunOptions = {}): Ru
     ticks: t,
     died: s.phase === "dead",
     hpLeft: s.player.hp,
-    stillFraction: t > 0 ? stillTicks / t : 0,
+    stillFraction: playTicks > 0 ? stillTicks / playTicks : 0,
+    taken: s.taken.slice(),
   };
 }
 
