@@ -29,7 +29,7 @@ Stillness is the commitment.
 ## Layout
 
 - `src/sim/` — types, rng, tick (pure)
-- `src/render/` — canvas2d renderer, particles
+- `src/render/` — canvas2d renderer, pixel-sprite atlas, seeded terrain, particles
 - `src/input/` — pointer/keyboard -> one `InputFrame` per tick
 - `src/data/` — enemies, waves, upgrades (declarative)
 - `src/main.ts` — fixed-timestep loop wiring the three together
