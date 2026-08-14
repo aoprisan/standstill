@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12">
+<link rel="manifest" href="manifest.webmanifest">
+<title>STANDSTILL</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --ice: #8fb4c9;
+    --ember: #ff7a3d;
+    --blood: #e8443a;
+    --bone: #e8e4da;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #hud {
+    position: fixed; top: env(safe-area-inset-top, 0); left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; pointer-events: none;
+    color: var(--bone); letter-spacing: 0.12em; font-size: 13px;
+  }
+  #hearts { color: var(--blood); font-size: 15px; letter-spacing: 0.2em; }
+  #timeState {
+    position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0)); left: 0; right: 0;
+    text-align: center; pointer-events: none;
+    letter-spacing: 0.35em; font-size: 11px; text-transform: uppercase;
+    transition: color 0.15s;
+  }
+  #overlay {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: rgba(11,13,18,0.82); color: var(--bone);
+    padding: 24px; gap: 18px;
+  }
+  #overlay.hidden { display: none; }
+  #overlay h1 {
+    font-size: clamp(38px, 11vw, 72px);
+    letter-spacing: 0.28em; font-weight: 700; text-indent: 0.28em;
+  }
+  #overlay h1 .cold { color: var(--ice); }
+  #overlay h1 .hot { color: var(--ember); }
+  #overlay p { max-width: 300px; line-height: 1.7; font-size: 13px; color: #9aa3b2; }
+  #overlay p b { color: var(--bone); font-weight: 600; }
+  #overlay .tap {
+    margin-top: 10px; padding: 12px 34px;
+    border: 1px solid var(--ember); color: var(--ember);
+    letter-spacing: 0.25em; font-size: 12px; text-transform: uppercase;
+    animation: pulse 1.6s ease-in-out infinite; cursor: pointer;
+  }
+  @keyframes pulse { 50% { opacity: 0.45; } }
+  @media (prefers-reduced-motion: reduce) { #overlay .tap { animation: none; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <span id="waveLabel">WAVE 1</span>
+  <span id="hearts">&#9829; &#9829; &#9829;</span>
+</div>
+<div id="timeState">TIME FLOWS</div>
+<div id="overlay">
+  <h1><span class="cold">STAND</span><span class="hot">STILL</span></h1>
+  <p><b>Drag</b> to move &mdash; the world freezes while you do.<br><br>
+     <b>Let go</b> and time flows: you auto-fire,<br>but so does everything else.</p>
+  <p style="font-size:11px; letter-spacing:0.1em;">stillness is the commitment</p>
+  <div class="tap" id="startBtn">TOUCH TO BEGIN</div>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

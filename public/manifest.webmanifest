@@ -1,0 +1,11 @@
+{
+  "name": "Standstill",
+  "short_name": "Standstill",
+  "description": "Moving freezes time. Standing still is the commitment.",
+  "start_url": ".",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": []
+}
