@@ -5,10 +5,22 @@
  */
 import { DT, type InputFrame } from "../sim/types";
 
-const DRAG_AMP = 1.15;
-const KEY_SPEED = 4.5;
-const MOVE_THRESHOLD = 0.7;
-const HEAT_DECAY = 7;
+export const DRAG_AMP = 1.15;
+export const KEY_SPEED = 4.5;
+export const MOVE_THRESHOLD = 0.7;
+export const HEAT_DECAY = 7;
+/** Move-heat above this counts as "moving" (and so freezes the world). */
+export const MOVE_HEAT_ACTIVE = 0.05;
+
+/**
+ * Move-heat: snaps to 1 the instant you move, then bleeds off after you stop.
+ * The decay is what stops thumb jitter from flickering the freeze state — and
+ * it means unfreezing costs you ~8 ticks. Bots must pay that cost too, so this
+ * lives here as a pure function shared by InputSource and test/bots/harness.
+ */
+export function stepMoveHeat(heat: number, speed: number, dt: number): number {
+  return speed > MOVE_THRESHOLD ? 1 : Math.max(0, heat - dt * HEAT_DECAY);
+}
 
 export class InputSource {
   private active = false;
@@ -63,7 +75,7 @@ export class InputSource {
       my += (ky / kl) * KEY_SPEED;
     }
     const speed = Math.hypot(mx, my);
-    this.moveHeat = speed > MOVE_THRESHOLD ? 1 : Math.max(0, this.moveHeat - DT * HEAT_DECAY);
-    return { mx, my, moving: this.moveHeat > 0.05 };
+    this.moveHeat = stepMoveHeat(this.moveHeat, speed, DT);
+    return { mx, my, moving: this.moveHeat > MOVE_HEAT_ACTIVE };
   }
 }

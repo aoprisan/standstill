@@ -27,6 +27,9 @@ export interface Enemy {
   archetype: string;
   x: number;
   y: number;
+  /** Steering velocity in px/s, independent of timeScale. Used for intercept aim. */
+  vx: number;
+  vy: number;
   r: number;
   hp: number;
   fireCd: number;
