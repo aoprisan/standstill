@@ -1,5 +1,7 @@
 /**
- * Procedural pixel-art sprites for the medieval-fantasy theme.
+ * Procedural pixel-art sprites in a Warcraft-like style: chunky units with
+ * near-black outlines and saturated colors, drawn as if seen from the classic
+ * three-quarter top-down RTS camera.
  *
  * Each sprite is a small character grid baked once to an offscreen canvas at
  * startup; draws scale the baked canvas with image smoothing off for a crisp
@@ -21,147 +23,299 @@ interface SpriteDef {
 /** Device pixels per grid cell when baking. */
 const CELL = 4;
 
-// The player: a knight — plumed helm, visor slit, a burning heart in the cuirass.
-const KNIGHT_GRID = [
-  "......p......",
-  ".....ppp.....",
-  "....hhhhh....",
-  "...hhhhhhh...",
-  "..hhhXXXhhh..",
-  "..hhhhhhhhh..",
-  "..aaacccaaa..",
-  "..aacCCCcaa..",
-  "..aacCCCcaa..",
-  "..aaacccaaa..",
-  "...aaaaaaa...",
-  "....aa.aa....",
+/** Shared near-black outline every unit wears, Warcraft style. */
+const INK = "#14100c";
+
+// The player: a human footman — plumed helm, mail, kingdom-blue tabard,
+// raised sword on one side and a kite shield on the other.
+const FOOTMAN_GRID = [
+  "......ooo......",
+  ".....ohhho.....",
+  "....ohHHhho....",
+  "....ohhhhho....",
+  "....offfffo....",
+  "....ofefefo....",
+  ".....offfo.....",
+  "..oo.ooooo.oo..",
+  ".owwo.oaao.sso.",
+  ".owwoaattaaoso.",
+  ".owwoaatTaaoso.",
+  ".oWWoaattaaoso.",
+  ".owwoaattaaoso.",
+  "..oo.oattao.o..",
+  ".....otttto....",
+  "....obbobbo....",
+  "....obo.obo....",
+  "....oo...oo....",
 ] as const;
 
-// Mage: wide-brimmed pointed hat, glowing eyes, robe with a focus gem.
-const MAGE_GRID = [
-  "......h......",
-  ".....hhh.....",
-  ".....hhh.....",
-  "....hhhhh....",
-  "...hhhhhhh...",
-  "..hhhhhhhhh..",
-  "....fXfXf....",
-  "....fffff....",
-  "...rrrrrrr...",
-  "..rrrcCcrrr..",
-  "..rrrrrrrrr..",
-  "...rr...rr...",
+// Orc grunt: green skin, jutting tusks, studded leather and spiked pauldrons.
+const GRUNT_GRID = [
+  ".....ooo.......",
+  "....ogggo......",
+  "...ogggggo.....",
+  "...ogeggego....",
+  "...oggggggo....",
+  "..otggggggto...",
+  "....oggggo.....",
+  "..ooooooooooo..",
+  ".oppogggogppo..",
+  ".oppogvvgoppo..",
+  "..oo.gvvvg.oo..",
+  "....ogvvgo.....",
+  "....ovvvvo.....",
+  "....obbobbo....",
+  "....obo.obo....",
+  "....oo...oo....",
 ] as const;
 
-// Dragon: raised wings, horned head, a furnace glowing through the belly scales.
+// Ogre: hulking blue-skinned bruiser in a leather harness.
+const OGRE_GRID = [
+  "......ooooo......",
+  ".....oyyyyyo.....",
+  "....oyyyyyyyo....",
+  "....oyeyyyeyo....",
+  "....oyyyyyyyo....",
+  "...otyyyyyyyto...",
+  ".....oyyyyyo.....",
+  "..ooooyyyyyoooo..",
+  ".oyyoyyyyyyyoyyo.",
+  ".oyyohhhhhhhoyyo.",
+  ".oyyohhyyyhhoyyo.",
+  "..oo.oyyyyyo.oo..",
+  ".....ohhhhho.....",
+  ".....ohhhhho.....",
+  "....oyyo.oyyo....",
+  "....oyyo.oyyo....",
+  "....oooo.oooo....",
+] as const;
+
+// Warlock: hooded violet robe, a void where a face should be, fel-green eyes.
+const WARLOCK_GRID = [
+  "......ooo......",
+  ".....orrro.....",
+  "....orrrrro....",
+  "...orrooorro...",
+  "...oroDDDoro...",
+  "...oroEDEoro...",
+  "...oroDDDoro...",
+  "....orrrrro....",
+  "..oorrrrrrroo..",
+  ".ororrgggrroro.",
+  ".ororrgGgrroro.",
+  ".ororrrgrrroro.",
+  "..oo.rrrrr.oo..",
+  "....orrrrro....",
+  "....orrrrro....",
+  "...orrrrrrro...",
+  "...oo.....oo...",
+] as const;
+
+// Red dragon: swept wings, horned brow, furnace glow along the belly.
 const DRAGON_GRID = [
-  "w...........w",
-  "ww.........ww",
-  "www..bbb..www",
-  "wwwwbbbbbwwww",
-  ".wwbbXbXbbww.",
-  "..wbbbbbbbw..",
-  "...bbFFFbb...",
-  "....bbFbb....",
-  ".....bbb.....",
-  "......b......",
+  "o...............o",
+  "oo.............oo",
+  "owo....ooo....owo",
+  "owwo..ohhho..owwo",
+  "owwwoohEhEhoowwwo",
+  ".owwwohhhhhowwwo.",
+  "..owwohhhhhowwo..",
+  "....oohFFFhoo....",
+  ".....ohFFFho.....",
+  "......ohhho......",
+  ".......ohho......",
+  "........oo.......",
 ] as const;
 
-// Priest: mitre, vestments, and a tall glowing cross on the chest.
-const PRIEST_GRID = [
-  ".....mmm.....",
-  "....mmmmm....",
-  "....mmmmm....",
-  "....fXfXf....",
-  "....fffff....",
-  "...rrrrrrr...",
-  "..rrrrCrrrr..",
-  "..rrrCCCrrr..",
-  "..rrrrCrrrr..",
-  "..rrrrCrrrr..",
-  "..rrrrrrrrr..",
-  "...rrrrrrr...",
+// Player shot: a spinning throwing axe — twin steel blades about a gilt haft.
+const AXE_GRID = [
+  "..o...o..",
+  ".oWo.oWo.",
+  ".oWWoWWo.",
+  "..oWXWo..",
+  "...oXo...",
+  "..oWXWo..",
+  ".oWWoWWo.",
+  ".oWo.oWo.",
+  "..o...o..",
 ] as const;
 
-// Player shot: a blessed steel quarrel with a gilt core.
-const BOLT_GRID = [
-  "..eee..",
-  ".eEEEe.",
-  "eEEXEEe",
-  "eEXXXEe",
-  "eEEXEEe",
-  ".eEEEe.",
-  "..eee..",
-] as const;
-
-// Enemy shot: dragonfire while time flows, an arcane stasis orb while held.
+// Enemy shot: dragonfire while time flows, a frozen frost orb while held.
 const ORB_GRID = [
-  "...ooo...",
-  ".ooCCCoo.",
-  ".oCCCCCo.",
-  "oCCXXXCCo",
-  "oCXXXXXCo",
-  "oCCXXXCCo",
-  ".oCCCCCo.",
-  ".ooCCCoo.",
-  "...ooo...",
+  "....ooo....",
+  "..oorrroo..",
+  ".orrfffrro.",
+  ".orfyyyfro.",
+  "orfyyYyyfro",
+  "orfyYYYyfro",
+  "orfyyYyyfro",
+  ".orfyyyfro.",
+  ".orrfffrro.",
+  "..oorrroo..",
+  "....ooo....",
 ] as const;
 
 const DEFS = {
-  knightHot: {
-    grid: KNIGHT_GRID,
-    scale: 2.4,
-    palette: { p: "#c2453c", h: "#c7cdd9", X: "#ffd9a8", a: "#8a92a5", c: "#e8b84b", C: "#fff2c4" },
+  footmanHot: {
+    grid: FOOTMAN_GRID,
+    scale: 2.5,
+    palette: {
+      o: INK,
+      h: "#b8bfcc",
+      H: "#eef2f8",
+      f: "#e8b088",
+      e: "#241a12",
+      a: "#98a0b0",
+      t: "#2858c8",
+      T: "#6a9af0",
+      w: "#c8d0dc",
+      W: "#f0f6ff",
+      s: "#3a66cc",
+      b: "#5a3a20",
+    },
   },
-  knightCold: {
-    grid: KNIGHT_GRID,
-    scale: 2.4,
-    palette: { p: "#6b5a82", h: "#9aa3b8", X: "#cdbdf0", a: "#707a90", c: "#8f7fd0", C: "#d9ccf5" },
+  footmanCold: {
+    grid: FOOTMAN_GRID,
+    scale: 2.5,
+    palette: {
+      o: "#101420",
+      h: "#8894ac",
+      H: "#c2cede",
+      f: "#a8b4c8",
+      e: "#1c2230",
+      a: "#707c94",
+      t: "#4a5878",
+      T: "#7c8cb0",
+      w: "#9aa8c0",
+      W: "#d0dcee",
+      s: "#4c5c84",
+      b: "#3c4458",
+    },
   },
-  mageHot: {
-    grid: MAGE_GRID,
-    scale: 2.4,
-    palette: { h: "#5a3d8f", f: "#e8d5b8", X: "#c9a8ff", r: "#3f2f66", c: "#8f5fd0", C: "#e0ccff" },
+  gruntHot: {
+    grid: GRUNT_GRID,
+    scale: 2.5,
+    palette: {
+      o: INK,
+      g: "#4e8f2e",
+      e: "#e03020",
+      t: "#f0ead8",
+      p: "#8a4a2a",
+      v: "#5a3a22",
+      b: "#3a2a18",
+    },
   },
-  mageCold: {
-    grid: MAGE_GRID,
-    scale: 2.4,
-    palette: { h: "#4a5570", f: "#c6cdda", X: "#d6ecf7", r: "#333c52", c: "#5f7889", C: "#d6ecf7" },
+  gruntCold: {
+    grid: GRUNT_GRID,
+    scale: 2.5,
+    palette: {
+      o: "#101420",
+      g: "#5a7488",
+      e: "#8ca8c8",
+      t: "#c2cede",
+      p: "#54607c",
+      v: "#404c64",
+      b: "#303a4e",
+    },
+  },
+  ogreHot: {
+    grid: OGRE_GRID,
+    scale: 2.7,
+    palette: {
+      o: INK,
+      y: "#6878b8",
+      e: "#e0b030",
+      t: "#f0ead8",
+      h: "#6a4a2e",
+    },
+  },
+  ogreCold: {
+    grid: OGRE_GRID,
+    scale: 2.7,
+    palette: {
+      o: "#101420",
+      y: "#5c6c94",
+      e: "#a8bcd8",
+      t: "#c2cede",
+      h: "#485068",
+    },
+  },
+  warlockHot: {
+    grid: WARLOCK_GRID,
+    scale: 2.5,
+    palette: {
+      o: INK,
+      r: "#5a2878",
+      D: "#181020",
+      E: "#58e858",
+      g: "#8a48b8",
+      G: "#e8d8f0",
+    },
+  },
+  warlockCold: {
+    grid: WARLOCK_GRID,
+    scale: 2.5,
+    palette: {
+      o: "#101420",
+      r: "#3c4460",
+      D: "#141824",
+      E: "#9cc8e8",
+      g: "#586890",
+      G: "#c2cede",
+    },
   },
   dragonHot: {
     grid: DRAGON_GRID,
-    scale: 2.7,
-    palette: { w: "#6e2a22", b: "#a13a2c", X: "#ffd9a8", F: "#ff9a4d" },
+    scale: 2.8,
+    palette: {
+      o: INK,
+      w: "#7a2418",
+      h: "#b03a24",
+      E: "#ffd94a",
+      F: "#ff9a4d",
+    },
   },
   dragonCold: {
     grid: DRAGON_GRID,
-    scale: 2.7,
-    palette: { w: "#3f4a63", b: "#566178", X: "#d6ecf7", F: "#8f9fbd" },
+    scale: 2.8,
+    palette: {
+      o: "#101420",
+      w: "#3c4460",
+      h: "#566180",
+      E: "#c2d8ee",
+      F: "#8ca0c4",
+    },
   },
-  priestHot: {
-    grid: PRIEST_GRID,
-    scale: 2.4,
-    palette: { m: "#e8e0ce", f: "#d9b891", X: "#ffd9a8", r: "#6b5a3f", C: "#ffcf5e" },
+  axeSteel: {
+    grid: AXE_GRID,
+    scale: 3.2,
+    palette: {
+      o: "#2a2e38",
+      W: "#d9dde8",
+      X: "#c89838",
+    },
   },
-  priestCold: {
-    grid: PRIEST_GRID,
-    scale: 2.4,
-    palette: { m: "#b9c1cf", f: "#aab3c2", X: "#d6ecf7", r: "#454e60", C: "#9fb8d9" },
-  },
-  boltSteel: {
-    grid: BOLT_GRID,
-    scale: 3.4,
-    palette: { e: "#8a92a5", E: "#d9dde8", X: "#fff2c4" },
-  },
-  orbFire: {
+  fireball: {
     grid: ORB_GRID,
     scale: 2.6,
-    palette: { o: "rgba(255,122,61,0.4)", C: "#c2532a", X: "#ff9a4d" },
+    palette: {
+      o: "rgba(122,36,24,0.35)",
+      r: "#a83220",
+      f: "#ff7a3d",
+      y: "#ffc84a",
+      Y: "#fff2c4",
+    },
   },
-  orbArcane: {
+  frostOrb: {
     grid: ORB_GRID,
     scale: 2.6,
-    palette: { o: "rgba(159,143,208,0.4)", C: "#6f63a8", X: "#b3a5e8" },
+    palette: {
+      o: "rgba(60,90,140,0.35)",
+      r: "#3c5a8c",
+      f: "#68a8e0",
+      y: "#b8e0f8",
+      Y: "#f0faff",
+    },
   },
 } satisfies Record<string, SpriteDef>;
 

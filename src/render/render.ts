@@ -3,9 +3,10 @@
  * Visual randomness/time here is real-time and unseeded — outside the
  * deterministic boundary by design.
  *
- * Theme: medieval fantasy. A ruined castle hall whose floor-runes glow
- * while time flows; pixel-art mages, dragons and priests crossfade between
- * their living (hot) and time-held (cold) variants as timeScale moves.
+ * Theme: Warcraft-like battlefield. A grass-and-dirt overworld walled in
+ * forest, its circles of power glowing while time flows; outlined pixel
+ * units — a footman against grunts, ogres, warlocks and dragons — crossfade
+ * between their living (hot) and time-held (cold) variants as timeScale moves.
  */
 import type { GameState, SimEvent } from "../sim/types";
 import { SpriteAtlas, type SpriteKey } from "./sprites";
@@ -33,13 +34,12 @@ interface Mote {
 }
 
 const COLORS = {
-  bg: "#0e0b10",
-  arcane: "#9b8fd0",
-  arcaneBullet: "#b3a5e8",
+  bg: "#1c3a12",
+  frost: "#8cb4d8",
+  frostBullet: "#b8e0f8",
   gold: "#e8b84b",
   fire: "#ff9a4d",
   blood: "#e8443a",
-  parchment: "#e8e0ce",
 };
 
 /**
@@ -48,9 +48,10 @@ const COLORS = {
  * archetypes land (roadmap 3), key on e.archetype instead.
  */
 const ENEMY_SPRITES: [cold: SpriteKey, hot: SpriteKey][] = [
-  ["mageCold", "mageHot"],
+  ["gruntCold", "gruntHot"],
+  ["ogreCold", "ogreHot"],
+  ["warlockCold", "warlockHot"],
   ["dragonCold", "dragonHot"],
-  ["priestCold", "priestHot"],
 ];
 
 export class Renderer {
@@ -61,6 +62,8 @@ export class Renderer {
   private motes: Mote[] = [];
   private shake = 0;
   private flash = 0;
+  /** Accumulated axe rotation — advances with sim timeScale so thrown axes hang mid-spin when time is held. */
+  private spin = 0;
   private W = 0;
   private H = 0;
   private dpr = 1;
@@ -146,7 +149,7 @@ export class Renderer {
         kind: "spark",
       });
     }
-    // …and pale arcane dust sifts down while the world is held.
+    // …and frost dust sifts down while the world is held.
     if (ts < 0.5 && Math.random() < realDt * 10 * (1 - ts)) {
       this.motes.push({
         x: Math.random() * this.W,
@@ -195,22 +198,23 @@ export class Renderer {
     this.shake = Math.max(0, this.shake - realDt * 40);
     this.flash = Math.max(0, this.flash - realDt * 2);
     this.updateAtmosphere(ts, realDt);
+    this.spin += realDt * ts * 14;
 
     ctx.save();
     if (this.shake > 0.5) {
       ctx.translate((Math.random() * 2 - 1) * this.shake * 0.4, (Math.random() * 2 - 1) * this.shake * 0.4);
     }
 
-    // castle-hall arena floor
+    // battlefield floor
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(-20, -20, W + 40, H + 40);
     this.terrain.drawBase(ctx, W, H);
     if (coldness > 0.02) {
-      ctx.fillStyle = `rgba(84,72,120,${0.1 * coldness})`;
+      ctx.fillStyle = `rgba(80,110,160,${0.12 * coldness})`;
       ctx.fillRect(-20, -20, W + 40, H + 40);
     }
 
-    // carved magic: rune circles glow with time flow, flicker like candleflame
+    // inlaid magic: circles of power glow with time flow, flicker like torchlight
     const flicker = 0.9 + 0.1 * Math.sin(performance.now() * 0.013);
     this.terrain.drawRunes(ctx, W, H, 0.12 + 0.75 * ts * flicker);
 
@@ -223,7 +227,7 @@ export class Renderer {
         ctx.fillRect(m.x - 1, m.y - 1, 2, 2);
       } else {
         ctx.globalAlpha = fade * 0.5;
-        ctx.fillStyle = COLORS.arcaneBullet;
+        ctx.fillStyle = COLORS.frostBullet;
         ctx.fillRect(m.x - 1, m.y - 1, 1.5, 1.5);
       }
     }
@@ -231,7 +235,7 @@ export class Renderer {
 
     // held-time trajectory ghosts
     if (coldness > 0.3) {
-      ctx.strokeStyle = `rgba(155,143,208,${0.35 * coldness})`;
+      ctx.strokeStyle = `rgba(140,180,216,${0.35 * coldness})`;
       ctx.setLineDash([3, 6]);
       ctx.beginPath();
       for (const b of s.eBullets) {
@@ -243,8 +247,8 @@ export class Renderer {
     }
 
     // enemy bullets (binary hot/cold swap — these are the hot path)
-    const orbKey = ts > 0.5 ? "orbFire" : "orbArcane";
-    const orbHalo = ts > 0.5 ? "rgba(255,122,61,0.35)" : "rgba(159,143,208,0.3)";
+    const orbKey = ts > 0.5 ? "fireball" : "frostOrb";
+    const orbHalo = ts > 0.5 ? "rgba(255,122,61,0.35)" : "rgba(140,180,224,0.3)";
     ctx.strokeStyle = orbHalo;
     ctx.lineWidth = 1;
     for (const b of s.eBullets) {
@@ -254,12 +258,12 @@ export class Renderer {
       ctx.stroke();
     }
 
-    // player bullets
+    // player bullets — thrown axes, spinning while time flows
     for (const b of s.pBullets) {
-      this.atlas.draw(ctx, "boltSteel", b.x, b.y, b.r);
+      this.atlas.draw(ctx, "axeSteel", b.x, b.y, b.r, this.spin);
     }
 
-    // enemies — mages, dragons and priests, crossfading living over held
+    // enemies — grunts, ogres, warlocks and dragons, crossfading living over held
     for (const e of s.enemies) {
       const rot = e.wob * 0.5;
       const [cold, hot] = ENEMY_SPRITES[e.id % ENEMY_SPRITES.length]!;
@@ -279,13 +283,13 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
 
-    // player — the knight, heart-core crossfading gilt/arcane
+    // player — the footman, crossfading kingdom colors over frost
     const blink = p.iframes > 0 && Math.floor(p.iframes * 12) % 2 === 0;
     if (!blink) {
-      this.atlas.draw(ctx, "knightCold", p.x, p.y, p.r);
+      this.atlas.draw(ctx, "footmanCold", p.x, p.y, p.r);
       if (ts > 0.02) {
         ctx.globalAlpha = ts;
-        this.atlas.draw(ctx, "knightHot", p.x, p.y, p.r);
+        this.atlas.draw(ctx, "footmanHot", p.x, p.y, p.r);
         ctx.globalAlpha = 1;
       }
       if (ts > 0.5 && s.phase === "playing") {
@@ -304,8 +308,8 @@ export class Renderer {
 
     if (coldness > 0.05) {
       const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
-      vg.addColorStop(0, "rgba(155,143,208,0)");
-      vg.addColorStop(1, `rgba(94,82,140,${0.28 * coldness})`);
+      vg.addColorStop(0, "rgba(140,180,216,0)");
+      vg.addColorStop(1, `rgba(60,90,140,${0.3 * coldness})`);
       ctx.fillStyle = vg;
       ctx.fillRect(-20, -20, W + 40, H + 40);
     }
