@@ -103,7 +103,7 @@ function frame(now: number): void {
       acc -= DT;
     }
     timeState.textContent = state.timeScale < 0.5 ? "F R O Z E N" : "TIME FLOWS";
-    (timeState as HTMLElement).style.color = state.timeScale < 0.5 ? "var(--ice)" : "var(--ember)";
+    (timeState as HTMLElement).style.color = state.timeScale < 0.5 ? "var(--arcane)" : "var(--gold)";
   }
 
   if (state) renderer.draw(state, elapsed);
