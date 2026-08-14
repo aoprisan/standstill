@@ -58,6 +58,7 @@ function start(): void {
   // Daily-seed-ready: swap for a date-derived seed when leaderboards land.
   const seed = (Math.random() * 0xffffffff) >>> 0;
   state = createState(seed, w, h);
+  renderer.newRun(seed);
   overlay.classList.add("hidden");
   draftEl.classList.add("hidden");
   hearts.textContent = "\u2665 \u2665 \u2665";
