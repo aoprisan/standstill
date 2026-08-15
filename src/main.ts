@@ -4,6 +4,7 @@ import { createState, tick } from "./sim/tick";
 import { InputSource } from "./input/input";
 import { Renderer } from "./render/render";
 import { UPGRADE_BY_ID } from "./data/upgrades";
+import { initPwa } from "./pwa";
 
 const canvas = document.getElementById("c") as HTMLCanvasElement;
 const hearts = document.getElementById("hearts")!;
@@ -12,6 +13,7 @@ const timeState = document.getElementById("timeState")!;
 const overlay = document.getElementById("overlay")!;
 const draftEl = document.getElementById("draft")!;
 const startBtn = document.getElementById("startBtn")!;
+const installBtn = document.getElementById("installBtn") as HTMLElement;
 const title = overlay.querySelector("h1")!;
 const paras = overlay.querySelectorAll("p");
 
@@ -77,6 +79,33 @@ function onGameOver(wave: number): void {
   startBtn.textContent = "AGAIN";
   overlay.classList.remove("hidden");
 }
+
+// PWA shell. A waiting update is only applied when nothing is at stake: before
+// the first run, or once the player has backgrounded the app. Reloading mid-run
+// would cost them the wave, and no update is worth that.
+initPwa({
+  onUpdateReady(apply) {
+    if (!state) {
+      apply();
+      return;
+    }
+    const onHidden = (): void => {
+      if (!document.hidden) return;
+      document.removeEventListener("visibilitychange", onHidden);
+      apply();
+    };
+    document.addEventListener("visibilitychange", onHidden);
+  },
+  onInstallAvailable(show) {
+    installBtn.hidden = false;
+    installBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // the overlay restarts the run on pointerdown
+      installBtn.hidden = true;
+      void show();
+    });
+  },
+});
 
 let acc = 0;
 let lastT = performance.now();
