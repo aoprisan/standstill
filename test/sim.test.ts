@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createState, tick } from "../src/sim/tick";
+import { offersDraft, PICKS_PER_DRAFT } from "../src/data/waves";
 
 const STILL = { mx: 0, my: 0, moving: false };
 const MOVING = { mx: 2, my: 0, moving: true };
@@ -34,26 +35,54 @@ describe("the mechanic", () => {
     expect(s.player.x).toBeGreaterThan(x0);
   });
 
-  it("clearing a wave opens a draft, and the pick starts the next wave", () => {
+  it("a non-draft wave rolls straight into the next one", () => {
     const s = createState(42, 400, 800);
     tick(s, STILL); // bootstraps wave 1
     expect(s.wave).toBe(1);
+    expect(offersDraft(1)).toBe(false);
+    s.enemies.length = 0; // simulate a clear
+    for (let t = 0; t < 90; t++) tick(s, STILL);
+
+    // No menu, no pause for input: the run keeps going.
+    expect(s.phase).toBe("playing");
+    expect(s.draft.length).toBe(0);
+    expect(s.wave).toBe(2);
+    expect(s.enemies.length).toBeGreaterThan(0);
+  });
+
+  it("clearing a draft wave opens a draft, and the last pick starts the next wave", () => {
+    const s = createState(42, 400, 800);
+    tick(s, STILL); // bootstraps wave 1
+    s.enemies.length = 0;
+    for (let t = 0; t < 90; t++) tick(s, STILL); // wave 1 -> wave 2, no draft
+    expect(s.wave).toBe(2);
+    expect(offersDraft(2)).toBe(true);
     s.enemies.length = 0; // simulate a clear
     for (let t = 0; t < 90; t++) tick(s, STILL);
 
     // The world holds still and offers a choice rather than spawning straight on.
     expect(s.phase).toBe("drafting");
     expect(s.draft.length).toBeGreaterThan(0);
-    expect(s.wave).toBe(1);
+    expect(s.wave).toBe(2);
 
     // No pick, no progress: the draft waits indefinitely.
     for (let t = 0; t < 120; t++) tick(s, STILL);
     expect(s.phase).toBe("drafting");
 
+    // A draft owes PICKS_PER_DRAFT picks: the early ones re-offer, the last one
+    // hands the run back.
+    for (let pick = PICKS_PER_DRAFT; pick > 1; pick--) {
+      tick(s, { ...STILL, select: 0 });
+      expect(s.phase).toBe("drafting");
+      expect(s.draft.length).toBeGreaterThan(0);
+      expect(s.wave).toBe(2);
+    }
+
     tick(s, { ...STILL, select: 0 });
     expect(s.phase).toBe("playing");
-    expect(s.taken.length).toBe(1);
-    expect(s.wave).toBe(2);
+    expect(s.taken.length).toBe(PICKS_PER_DRAFT);
+    expect(s.draft.length).toBe(0);
+    expect(s.wave).toBe(3);
     expect(s.enemies.length).toBeGreaterThan(0);
   });
 

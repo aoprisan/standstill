@@ -11,6 +11,7 @@
 import { describe, expect, it } from "vitest";
 import { runGame, seedSet, survey } from "./harness";
 import { alwaysMoving, alwaysStill, threader, makeThreader, DEFAULT_TUNING } from "./policies";
+import { offersDraft, PICKS_PER_DRAFT } from "../../src/data/waves";
 
 const SEEDS = seedSet(40);
 
@@ -19,7 +20,7 @@ describe("north star", () => {
     const st = survey(alwaysStill, SEEDS);
     expect(st.deathRate).toBe(1);
     // Asserted on the typical run, not the luckiest seed: a favourable spawn
-    // plus the wave-3 draft occasionally carries it one wave further, and
+    // plus the wave-2 draft occasionally carries it one wave further, and
     // pinning the maximum would make this fail on noise rather than on design.
     expect(st.medianWave).toBeLessThanOrEqual(3);
     expect(st.p90Wave).toBeLessThanOrEqual(3);
@@ -71,8 +72,9 @@ describe("the draft", () => {
   it("every run drafts, and picks accumulate as stacks", () => {
     const r = runGame(threader, SEEDS[0]!);
     expect(r.taken.length).toBeGreaterThan(0);
-    // One draft per cleared wave.
-    expect(r.taken.length).toBe(r.wave - 1);
+    // Not one per cleared wave: PICKS_PER_DRAFT picks per cleared *draft* wave.
+    const drafts = Array.from({ length: r.wave - 1 }, (_, i) => i + 1).filter(offersDraft).length;
+    expect(r.taken.length).toBe(drafts * PICKS_PER_DRAFT);
   });
 
   it("no upgrade is offered beyond its stack limit", async () => {
