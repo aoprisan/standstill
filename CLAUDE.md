@@ -4,6 +4,12 @@ One-thumb mobile roguelite PWA. Reverse-Superhot rule:
 **dragging (moving) freezes all projectiles; standing still lets time flow and auto-fires.**
 Stillness is the commitment.
 
+The game is a five-level campaign (`src/data/levels.ts`) and that is the single
+mode — no mode select. Each level owns a span of the GLOBAL wave counter, its
+own enemy roster and a terrain theme; drafts sit exactly on level boundaries,
+so perks carry across the whole campaign because GameState simply persists.
+Clearing the last wave (`TOTAL_WAVES`) is victory.
+
 ## Architecture invariants (do not erode these)
 
 1. **Sim purity.** Nothing in `src/sim/` may import from `src/render/` or `src/input/`,
@@ -29,9 +35,10 @@ Stillness is the commitment.
 ## Layout
 
 - `src/sim/` — types, rng, tick (pure)
-- `src/render/` — canvas2d renderer, pixel-sprite atlas, seeded terrain, particles
+- `src/render/` — canvas2d renderer, pixel-sprite atlas, seeded terrain
+  (themed per level via `TerrainTheme` palettes), particles
 - `src/input/` — pointer/keyboard -> one `InputFrame` per tick
-- `src/data/` — enemies, waves, upgrades (declarative)
+- `src/data/` — enemies, waves, upgrades, campaign levels (declarative)
 - `src/main.ts` — fixed-timestep loop wiring the three together
 - `src/pwa.ts` — service-worker lifecycle + install prompt (render-side rules apply)
 - `src/sw.js` — service worker source; `scripts/pwa-plugin.mjs` injects the
@@ -49,10 +56,11 @@ the first run or once the app is backgrounded. Keep that property if you touch
 - Freeze snap: exponential lerp `1 - 0.0001^dt` toward target timescale
 - Move-heat release: `7/s` decay (prevents freeze flicker on thumb jitter)
 - Player fire cooldown `0.22s`, bullet speed `520`, enemy bullet speed `190`
-- Perk cadence: drafts after waves 3, 8, 13, ... (`FIRST_DRAFT_WAVE` /
-  `DRAFT_INTERVAL`), `PICKS_PER_DRAFT = 4`. A draft stops the world, so it is
-  paced as an interruption, not a reward: fewer stops, each worth more, holding
-  perk income roughly constant. Changing either end moves the survival curve —
+- Perk cadence: drafts land on level boundaries — waves 3, 8, 13, 18 with the
+  shipped level lengths (3, 5, 5, 5, 5) — with `PICKS_PER_DRAFT = 4`. A draft
+  stops the world, so it is paced as an interruption, not a reward: fewer
+  stops, each worth more, holding perk income roughly constant. Changing a
+  level's length moves every draft after it and the survival curve —
   re-read `just sim-bench` before and after.
 
 ## Design goal as a test (north star)
@@ -65,8 +73,11 @@ reach wave 10+. Balance content against that curve, not vibes.
 
 1. ~~Scaffold~~ (this)
 2. Upgrade draft between waves (`src/data/upgrades.ts` — modifiers, incl. bullet-steal)
-3. Fire-pattern DSL + 4 archetypes (orbiter, sniper, spawner, wall-caster)
-4. PWA polish: ~~service worker + icons + offline~~; still to do: haptics,
+3. Fire-pattern DSL + archetypes — archetypes landed as steering/spread data
+   (orbiter, charger, sniper, warden, brute in `src/data/enemies.ts`); a real
+   pattern DSL is still open
+4. ~~Campaign mode~~: five themed levels, perks carry over, victory at the end
+5. PWA polish: ~~service worker + icons + offline~~; still to do: haptics,
    reduced-motion pass, entity pooling
-5. Headless balance bots + survival-curve tuning
-6. lockstep integration: replays + daily-seed ghosts
+6. Headless balance bots + survival-curve tuning
+7. lockstep integration: replays + daily-seed ghosts

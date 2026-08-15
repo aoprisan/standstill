@@ -10,7 +10,7 @@
  */
 import type { GameState, SimEvent } from "../sim/types";
 import { SpriteAtlas, type SpriteKey } from "./sprites";
-import { Terrain } from "./terrain";
+import { Terrain, THEMES, type TerrainTheme } from "./terrain";
 
 interface Particle {
   x: number;
@@ -34,7 +34,6 @@ interface Mote {
 }
 
 const COLORS = {
-  bg: "#1c3a12",
   frost: "#8cb4d8",
   frostBullet: "#b8e0f8",
   gold: "#e8b84b",
@@ -43,16 +42,18 @@ const COLORS = {
 };
 
 /**
- * Hot/cold sprite pair per enemy, keyed on stable id so a given enemy keeps
- * its face for its whole life. Cosmetic variety only — when fire-pattern
- * archetypes land (roadmap 3), key on e.archetype instead.
+ * Hot/cold sprite pair per archetype — archetypes landed with the campaign,
+ * so an enemy's face now tells you how it fights. Brutes reuse the ogre at
+ * their larger radius.
  */
-const ENEMY_SPRITES: [cold: SpriteKey, hot: SpriteKey][] = [
-  ["gruntCold", "gruntHot"],
-  ["ogreCold", "ogreHot"],
-  ["warlockCold", "warlockHot"],
-  ["dragonCold", "dragonHot"],
-];
+const ENEMY_SPRITES: Record<string, [cold: SpriteKey, hot: SpriteKey]> = {
+  orbiter: ["gruntCold", "gruntHot"],
+  charger: ["ogreCold", "ogreHot"],
+  sniper: ["warlockCold", "warlockHot"],
+  warden: ["dragonCold", "dragonHot"],
+  brute: ["ogreCold", "ogreHot"],
+};
+const FALLBACK_SPRITES: [cold: SpriteKey, hot: SpriteKey] = ["gruntCold", "gruntHot"];
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -68,6 +69,9 @@ export class Renderer {
   private H = 0;
   private dpr = 1;
   private seed = 1;
+  private theme: TerrainTheme = THEMES.greenwood!;
+  /** Run seed salted by the current level, so each level bakes its own floor. */
+  private bakeSeed = 1;
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
@@ -84,15 +88,29 @@ export class Renderer {
     this.canvas.width = this.W * this.dpr;
     this.canvas.height = this.H * this.dpr;
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.terrain.bake(this.seed, this.W, this.H, this.dpr);
+    this.terrain.bake(this.bakeSeed, this.W, this.H, this.dpr, this.theme);
   }
 
   /** Re-bake the arena floor for a fresh run's seed. */
   newRun(seed: number): void {
     this.seed = seed >>> 0;
-    this.terrain.bake(this.seed, this.W, this.H, this.dpr);
+    this.bakeSeed = this.seed;
+    this.theme = THEMES.greenwood!;
+    this.terrain.bake(this.bakeSeed, this.W, this.H, this.dpr, this.theme);
     this.motes.length = 0;
     this.particles.length = 0;
+  }
+
+  /**
+   * Cross into a campaign level: swap the terrain theme and re-bake the floor
+   * from the run seed salted by the level, so each land is its own place but
+   * a given seed always marches through the same five battlefields.
+   */
+  setLevel(themeKey: string, level: number): void {
+    this.theme = THEMES[themeKey] ?? THEMES.greenwood!;
+    this.bakeSeed = (this.seed ^ Math.imul(level, 0x9e3779b9)) >>> 0;
+    this.terrain.bake(this.bakeSeed, this.W, this.H, this.dpr, this.theme);
+    this.motes.length = 0;
   }
 
   get size(): { w: number; h: number } {
@@ -206,7 +224,7 @@ export class Renderer {
     }
 
     // battlefield floor
-    ctx.fillStyle = COLORS.bg;
+    ctx.fillStyle = this.theme.bg;
     ctx.fillRect(-20, -20, W + 40, H + 40);
     this.terrain.drawBase(ctx, W, H);
     if (coldness > 0.02) {
@@ -266,7 +284,7 @@ export class Renderer {
     // enemies — grunts, ogres, warlocks and dragons, crossfading living over held
     for (const e of s.enemies) {
       const rot = e.wob * 0.5;
-      const [cold, hot] = ENEMY_SPRITES[e.id % ENEMY_SPRITES.length]!;
+      const [cold, hot] = ENEMY_SPRITES[e.archetype] ?? FALLBACK_SPRITES;
       this.atlas.draw(ctx, cold, e.x, e.y, e.r, rot);
       if (ts > 0.02) {
         ctx.globalAlpha = ts;

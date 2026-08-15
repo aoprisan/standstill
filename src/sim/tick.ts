@@ -6,6 +6,7 @@ import { DT, type GameState, type InputFrame, type Enemy } from "./types";
 import { range } from "./rng";
 import { ENEMIES } from "../data/enemies";
 import { offersDraft, PICKS_PER_DRAFT, waveDef, WAVE_CLEAR_DELAY } from "../data/waves";
+import { levelForWave, TOTAL_WAVES } from "../data/levels";
 import { applyUpgrade, DRAFT_SIZE, UPGRADE_BY_ID, UPGRADES } from "../data/upgrades";
 
 // Feel constants — tuned on device, change deliberately (see CLAUDE.md).
@@ -22,6 +23,7 @@ export function createState(seed: number, arenaW: number, arenaH: number): GameS
     arenaW,
     arenaH,
     phase: "playing",
+    level: 0,
     wave: 0,
     waveClearT: 0,
     timeScale: 1,
@@ -79,6 +81,16 @@ function interceptAngle(px: number, py: number, e: Enemy, speed: number): number
 
 function spawnWave(s: GameState, wave: number): void {
   s.wave = wave;
+  // Crossing into a new level: announce it (the renderer re-bakes terrain on
+  // this event) and grant a one-heart respite — a campaign asks you to arrive
+  // somewhere, and arriving should feel like reaching shelter. Perks carry
+  // over by construction: the state simply persists across the boundary.
+  const level = levelForWave(wave);
+  if (level !== s.level) {
+    s.level = level;
+    s.player.hp = Math.min(s.player.maxHp, s.player.hp + 1);
+    s.events.push({ kind: "levelStarted", level });
+  }
   const def = waveDef(wave);
   for (const spawn of def.spawns) {
     const proto = ENEMIES[spawn.archetype];
@@ -186,7 +198,7 @@ function tickDraft(s: GameState, input: InputFrame): void {
 /** Advance the simulation by exactly one fixed step. */
 export function tick(s: GameState, input: InputFrame): void {
   s.events.length = 0;
-  if (s.phase === "dead") return;
+  if (s.phase === "dead" || s.phase === "victory") return;
   if (s.phase === "drafting") {
     tickDraft(s, input);
     return;
@@ -288,18 +300,40 @@ export function tick(s: GameState, input: InputFrame): void {
   for (const e of s.enemies) {
     const proto = ENEMIES[e.archetype];
     if (!proto) continue;
-    e.wob += DT * ts * 2;
+    e.wob += DT * ts * proto.wobRate;
     const dx = p.x - e.x;
     const dy = p.y - e.y;
     const d = Math.hypot(dx, dy) || 1;
-    const radial = (d - e.orbitR) * 0.9;
+    // Shared steering model — seek the orbit ring, slide along it, wobble —
+    // with the gains coming from data, so archetypes differ without branching.
+    const radial = (d - e.orbitR) * proto.radialGain;
     const tx = (-dy / d) * e.orbitDir;
     const tyv = (dx / d) * e.orbitDir;
     // Velocity is stored in px/s so intercept aim stays correct while frozen.
-    e.vx = (dx / d) * radial * 0.9 + tx * 70 + Math.cos(e.wob) * 20;
-    e.vy = (dy / d) * radial * 0.9 + tyv * 70 + Math.sin(e.wob) * 20;
+    e.vx = (dx / d) * radial + tx * proto.tangential + Math.cos(e.wob) * proto.wobAmp;
+    e.vy = (dy / d) * radial + tyv * proto.tangential + Math.sin(e.wob) * proto.wobAmp;
+    // The arena walls everyone. Without this, wide-orbit archetypes (snipers)
+    // settle outside the playfield, where the cull margin eats both their
+    // shots and yours — an invisible turret no one can kill, a stalled wave.
+    // The wall also zeroes the outward velocity component: intercept aim
+    // leads targets by e.vx/e.vy, and a pinned body with phantom steering
+    // velocity would be unhittable.
     e.x += e.vx * DT * ts;
     e.y += e.vy * DT * ts;
+    if (e.x < e.r) {
+      e.x = e.r;
+      e.vx = Math.max(0, e.vx);
+    } else if (e.x > s.arenaW - e.r) {
+      e.x = s.arenaW - e.r;
+      e.vx = Math.min(0, e.vx);
+    }
+    if (e.y < e.r) {
+      e.y = e.r;
+      e.vy = Math.max(0, e.vy);
+    } else if (e.y > s.arenaH - e.r) {
+      e.y = s.arenaH - e.r;
+      e.vy = Math.min(0, e.vy);
+    }
 
     e.fireCd -= DT * ts;
     if (e.fireCd <= 0) {
@@ -383,8 +417,14 @@ export function tick(s: GameState, input: InputFrame): void {
     s.waveClearT += DT;
     if (s.waveClearT > WAVE_CLEAR_DELAY) {
       s.waveClearT = 0;
-      // Most waves roll straight into the next one; only the draft waves stop
-      // the run to ask a question (see offersDraft).
+      // Clearing the final wave of the final level ends the campaign.
+      if (s.wave >= TOTAL_WAVES) {
+        s.phase = "victory";
+        s.events.push({ kind: "victory", wave: s.wave });
+        return;
+      }
+      // Most waves roll straight into the next one; only the level-boundary
+      // waves stop the run to ask a question (see offersDraft).
       s.draftPicks = offersDraft(s.wave) ? PICKS_PER_DRAFT : 0;
       s.draft = s.draftPicks > 0 ? rollDraft(s) : [];
       if (s.draft.length > 0) {

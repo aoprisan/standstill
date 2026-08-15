@@ -72,6 +72,8 @@ export type SimEvent =
   | { kind: "enemyHit"; x: number; y: number }
   | { kind: "enemyDied"; x: number; y: number }
   | { kind: "waveStarted"; wave: number }
+  | { kind: "levelStarted"; level: number }
+  | { kind: "victory"; wave: number }
   | { kind: "draftOffered"; options: readonly string[]; remaining: number }
   | { kind: "upgradeTaken"; id: string }
   | { kind: "bulletStolen"; x: number; y: number }
@@ -83,7 +85,10 @@ export interface GameState {
   tickCount: number;
   arenaW: number;
   arenaH: number;
-  phase: "playing" | "drafting" | "dead";
+  phase: "playing" | "drafting" | "dead" | "victory";
+  /** Current campaign level, 1-based (see src/data/levels.ts). */
+  level: number;
+  /** Global campaign wave — does NOT reset per level. */
   wave: number;
   waveClearT: number;
   timeScale: number;
