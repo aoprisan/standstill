@@ -9,6 +9,10 @@ test:
 build:
     npm run build
 
+# Redraw the PWA icons from scripts/gen-icons.mjs into public/icons/
+icons:
+    npm run icons
+
 preview: build
     npm run preview
 

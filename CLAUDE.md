@@ -33,7 +33,15 @@ Stillness is the commitment.
 - `src/input/` — pointer/keyboard -> one `InputFrame` per tick
 - `src/data/` — enemies, waves, upgrades (declarative)
 - `src/main.ts` — fixed-timestep loop wiring the three together
+- `src/pwa.ts` — service-worker lifecycle + install prompt (render-side rules apply)
+- `src/sw.js` — service worker source; `scripts/pwa-plugin.mjs` injects the
+  precache list at build time and emits `dist/sw.js`. Not bundled by vite.
+- `scripts/gen-icons.mjs` — draws `public/icons/` from one pixel-art scene
 - `test/` — headless sim tests (vitest). The sim runs fine in Node.
+
+An update must never reload a live run: a waiting worker takes over only before
+the first run or once the app is backgrounded. Keep that property if you touch
+`src/pwa.ts`.
 
 ## Feel constants (tuned on device — change deliberately)
 
@@ -53,6 +61,7 @@ reach wave 10+. Balance content against that curve, not vibes.
 1. ~~Scaffold~~ (this)
 2. Upgrade draft between waves (`src/data/upgrades.ts` — modifiers, incl. bullet-steal)
 3. Fire-pattern DSL + 4 archetypes (orbiter, sniper, spawner, wall-caster)
-4. PWA polish: service worker, haptics, reduced-motion, entity pooling
+4. PWA polish: ~~service worker + icons + offline~~; still to do: haptics,
+   reduced-motion pass, entity pooling
 5. Headless balance bots + survival-curve tuning
 6. lockstep integration: replays + daily-seed ghosts
