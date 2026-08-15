@@ -20,8 +20,10 @@ describe("north star", () => {
     const st = survey(alwaysStill, SEEDS);
     expect(st.deathRate).toBe(1);
     // Asserted on the typical run, not the luckiest seed: a favourable spawn
-    // plus the wave-2 draft occasionally carries it one wave further, and
-    // pinning the maximum would make this fail on noise rather than on design.
+    // occasionally carries it one wave further, and pinning the maximum would
+    // make this fail on noise rather than on design. It is still a live bound —
+    // handing a draft to a policy that never moves (drafting earlier, or fatter)
+    // pushes p90 to 4 and this test catches it.
     expect(st.medianWave).toBeLessThanOrEqual(3);
     expect(st.p90Wave).toBeLessThanOrEqual(3);
   });
