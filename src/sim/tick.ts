@@ -5,7 +5,7 @@
 import { DT, type GameState, type InputFrame, type Enemy } from "./types";
 import { range } from "./rng";
 import { ENEMIES } from "../data/enemies";
-import { waveDef, WAVE_CLEAR_DELAY } from "../data/waves";
+import { offersDraft, PICKS_PER_DRAFT, waveDef, WAVE_CLEAR_DELAY } from "../data/waves";
 import { applyUpgrade, DRAFT_SIZE, UPGRADE_BY_ID, UPGRADES } from "../data/upgrades";
 
 // Feel constants — tuned on device, change deliberately (see CLAUDE.md).
@@ -48,6 +48,7 @@ export function createState(seed: number, arenaW: number, arenaH: number): GameS
     pBullets: [],
     nextEnemyId: 1,
     draft: [],
+    draftPicks: 0,
     taken: [],
     events: [],
   };
@@ -153,9 +154,10 @@ function rollDraft(s: GameState): string[] {
 }
 
 /**
- * Between waves the world holds still and the player chooses. Time is fully
+ * On a draft wave the world holds still and the player chooses. Time is fully
  * stopped here — no movement, no fire, no incoming — so the choice is never
- * made under duress.
+ * made under duress. A draft grants PICKS_PER_DRAFT picks, resolved one offer
+ * at a time; the next wave spawns when the last one is spent.
  */
 function tickDraft(s: GameState, input: InputFrame): void {
   const sel = input.select;
@@ -166,7 +168,17 @@ function tickDraft(s: GameState, input: InputFrame): void {
     s.taken.push(def.id);
     s.events.push({ kind: "upgradeTaken", id: def.id });
   }
-  s.draft.length = 0;
+  s.draftPicks--;
+  // Re-roll rather than offer the leftovers: the pick just made may have maxed
+  // a stack, and a fresh spread keeps the second choice a real question.
+  const next = s.draftPicks > 0 ? rollDraft(s) : [];
+  if (next.length > 0) {
+    s.draft = next;
+    s.events.push({ kind: "draftOffered", options: next.slice(), remaining: s.draftPicks });
+    return;
+  }
+  s.draftPicks = 0;
+  s.draft = [];
   s.phase = "playing";
   spawnWave(s, s.wave + 1);
 }
@@ -371,11 +383,15 @@ export function tick(s: GameState, input: InputFrame): void {
     s.waveClearT += DT;
     if (s.waveClearT > WAVE_CLEAR_DELAY) {
       s.waveClearT = 0;
-      s.draft = rollDraft(s);
+      // Most waves roll straight into the next one; only the draft waves stop
+      // the run to ask a question (see offersDraft).
+      s.draftPicks = offersDraft(s.wave) ? PICKS_PER_DRAFT : 0;
+      s.draft = s.draftPicks > 0 ? rollDraft(s) : [];
       if (s.draft.length > 0) {
         s.phase = "drafting";
-        s.events.push({ kind: "draftOffered", options: s.draft.slice() });
+        s.events.push({ kind: "draftOffered", options: s.draft.slice(), remaining: s.draftPicks });
       } else {
+        s.draftPicks = 0;
         spawnWave(s, s.wave + 1);
       }
     }

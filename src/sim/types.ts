@@ -72,7 +72,7 @@ export type SimEvent =
   | { kind: "enemyHit"; x: number; y: number }
   | { kind: "enemyDied"; x: number; y: number }
   | { kind: "waveStarted"; wave: number }
-  | { kind: "draftOffered"; options: readonly string[] }
+  | { kind: "draftOffered"; options: readonly string[]; remaining: number }
   | { kind: "upgradeTaken"; id: string }
   | { kind: "bulletStolen"; x: number; y: number }
   | { kind: "gameOver"; wave: number };
@@ -94,6 +94,8 @@ export interface GameState {
   nextEnemyId: number;
   /** Upgrade ids on offer while phase === "drafting". Empty otherwise. */
   draft: string[];
+  /** Picks still owed in the current draft, this one included. 0 while playing. */
+  draftPicks: number;
   /** Upgrade ids taken this run, in order. Repeats mean stacks. */
   taken: string[];
   events: SimEvent[];

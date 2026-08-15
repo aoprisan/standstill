@@ -23,9 +23,14 @@ input.attach(canvas);
 
 let state: GameState | null = null;
 
+const draftTitle = draftEl.querySelector("h2")!;
+
 /** Render the offer. Time is stopped in this phase, so there is no clock on it. */
-function showDraft(options: readonly string[], taken: readonly string[]): void {
-  draftEl.replaceChildren(draftEl.firstElementChild!);
+function showDraft(options: readonly string[], taken: readonly string[], remaining: number): void {
+  draftEl.replaceChildren(draftTitle);
+  // A draft can owe more than one pick, so say how many are left — otherwise the
+  // panel reappearing after a tap reads as a bug.
+  draftTitle.textContent = remaining > 1 ? `Choose · ${remaining} picks` : "Choose";
   options.forEach((id, i) => {
     const def = UPGRADE_BY_ID[id];
     if (!def) return;
@@ -126,7 +131,7 @@ function frame(now: number): void {
         if (ev.kind === "playerHit" || ev.kind === "upgradeTaken") {
           hearts.textContent = "\u2665 ".repeat(Math.max(0, state.player.hp)).trim();
         }
-        if (ev.kind === "draftOffered") showDraft(ev.options, state.taken);
+        if (ev.kind === "draftOffered") showDraft(ev.options, state.taken, ev.remaining);
         if (ev.kind === "gameOver") onGameOver(ev.wave);
       }
       acc -= DT;

@@ -49,6 +49,10 @@ the first run or once the app is backgrounded. Keep that property if you touch
 - Freeze snap: exponential lerp `1 - 0.0001^dt` toward target timescale
 - Move-heat release: `7/s` decay (prevents freeze flicker on thumb jitter)
 - Player fire cooldown `0.22s`, bullet speed `520`, enemy bullet speed `190`
+- Perk cadence: drafts after waves 2, 5, 8, ... (`FIRST_DRAFT_WAVE` /
+  `DRAFT_INTERVAL`), `PICKS_PER_DRAFT = 2`. A draft stops the world, so it is
+  paced as an interruption, not a reward. Changing either end moves the survival
+  curve — re-read `just sim-bench` before and after.
 
 ## Design goal as a test (north star)
 
