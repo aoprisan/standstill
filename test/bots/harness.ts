@@ -42,7 +42,11 @@ export interface Policy {
 export interface RunOptions {
   arenaW?: number;
   arenaH?: number;
-  /** Safety cap so a passive policy can't run forever. Default: 10 sim-minutes. */
+  /**
+   * Safety cap so a passive policy can't run forever. Default: 20 sim-minutes
+   * — sized so a full 23-wave campaign can resolve in death or victory, and a
+   * run that still hasn't done either is genuinely hiding, not just slow.
+   */
   maxTicks?: number;
 }
 
@@ -51,8 +55,9 @@ export interface RunResult {
   /** Highest wave reached. This is the score. */
   wave: number;
   ticks: number;
-  /** False means the policy hit maxTicks alive — a stall, not a win. */
   died: boolean;
+  /** True means the campaign was completed — every level cleared. */
+  won: boolean;
   hpLeft: number;
   /** Fraction of playing ticks spent not-moving, i.e. committed to stillness. */
   stillFraction: number;
@@ -60,7 +65,7 @@ export interface RunResult {
   taken: string[];
 }
 
-const DEFAULTS = { arenaW: 400, arenaH: 800, maxTicks: 60 * 60 * 10 };
+const DEFAULTS = { arenaW: 400, arenaH: 800, maxTicks: 60 * 60 * 20 };
 
 /** Play one full game with `policy` from `seed`. Deterministic. */
 export function runGame(policy: Policy, seed: number, opts: RunOptions = {}): RunResult {
@@ -74,7 +79,7 @@ export function runGame(policy: Policy, seed: number, opts: RunOptions = {}): Ru
   let t = 0;
   let maxWave = 0;
 
-  for (; t < maxTicks && s.phase !== "dead"; t++) {
+  for (; t < maxTicks && s.phase !== "dead" && s.phase !== "victory"; t++) {
     // Between waves the world is paused for the draft. Resolve the choice and
     // move on; these ticks are not play, so they do not count toward stillness.
     if (s.phase === "drafting") {
@@ -106,6 +111,7 @@ export function runGame(policy: Policy, seed: number, opts: RunOptions = {}): Ru
     wave: maxWave,
     ticks: t,
     died: s.phase === "dead",
+    won: s.phase === "victory",
     hpLeft: s.player.hp,
     stillFraction: playTicks > 0 ? stillTicks / playTicks : 0,
     taken: s.taken.slice(),
@@ -122,10 +128,12 @@ export interface Stats {
   minWave: number;
   maxWave: number;
   deathRate: number;
+  /** Fraction of runs that cleared the whole campaign. */
+  winRate: number;
   /**
-   * Fraction of runs that hit the tick cap alive. A high stall rate is the
-   * tell-tale of the coward equilibrium: freeze forever, kill nothing, never
-   * die. Survival without progress is not a score.
+   * Fraction of runs that hit the tick cap alive without winning. A high
+   * stall rate is the tell-tale of the coward equilibrium: freeze forever,
+   * kill nothing, never die. Survival without progress is not a score.
    */
   stallRate: number;
   meanStillFraction: number;
@@ -154,7 +162,8 @@ export function survey(policy: Policy, seeds: number[], opts: RunOptions = {}): 
     minWave: waves[0] ?? 0,
     maxWave: waves[waves.length - 1] ?? 0,
     deathRate: results.filter((r) => r.died).length / (results.length || 1),
-    stallRate: results.filter((r) => !r.died).length / (results.length || 1),
+    winRate: results.filter((r) => r.won).length / (results.length || 1),
+    stallRate: results.filter((r) => !r.died && !r.won).length / (results.length || 1),
     meanStillFraction: mean(results.map((r) => r.stillFraction)),
   };
 }
@@ -171,6 +180,7 @@ export function formatStats(st: Stats): string {
     `median=${f(st.medianWave)}  mean=${f(st.meanWave)}  ` +
     `p10=${f(st.p10Wave)}  p90=${f(st.p90Wave)}  ` +
     `range=[${st.minWave}..${st.maxWave}]  ` +
+    `win=${(st.winRate * 100).toFixed(0).padStart(3)}%  ` +
     `stall=${(st.stallRate * 100).toFixed(0).padStart(3)}%  ` +
     `still=${(st.meanStillFraction * 100).toFixed(0).padStart(3)}%`
   );

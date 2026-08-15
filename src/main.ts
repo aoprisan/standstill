@@ -4,6 +4,7 @@ import { createState, tick } from "./sim/tick";
 import { InputSource } from "./input/input";
 import { Renderer } from "./render/render";
 import { UPGRADE_BY_ID } from "./data/upgrades";
+import { LEVELS, TOTAL_WAVES } from "./data/levels";
 import { initPwa } from "./pwa";
 
 const canvas = document.getElementById("c") as HTMLCanvasElement;
@@ -11,6 +12,7 @@ const hearts = document.getElementById("hearts")!;
 const waveLabel = document.getElementById("waveLabel")!;
 const timeState = document.getElementById("timeState")!;
 const overlay = document.getElementById("overlay")!;
+const banner = document.getElementById("banner")!;
 const draftEl = document.getElementById("draft")!;
 const startBtn = document.getElementById("startBtn")!;
 const installBtn = document.getElementById("installBtn") as HTMLElement;
@@ -60,6 +62,18 @@ function showDraft(options: readonly string[], taken: readonly string[], remaini
   draftEl.classList.remove("hidden");
 }
 
+/** Announce a campaign level. Restarting the CSS animation needs the class
+ *  dropped, a reflow, and the class re-added. */
+function showBanner(level: number, name: string): void {
+  banner.classList.remove("show");
+  banner.innerHTML = "";
+  const small = document.createElement("small");
+  small.textContent = `Level ${level} of ${LEVELS.length}`;
+  banner.append(small, document.createTextNode(name));
+  void banner.offsetWidth;
+  banner.classList.add("show");
+}
+
 function start(): void {
   const { w, h } = renderer.size;
   // Daily-seed-ready: swap for a date-derived seed when leaderboards land.
@@ -73,15 +87,31 @@ function start(): void {
 
 startBtn.addEventListener("pointerdown", start);
 overlay.addEventListener("pointerdown", () => {
-  if (!state || state.phase === "dead") start();
+  if (!state || state.phase === "dead" || state.phase === "victory") start();
 });
 
 function onGameOver(wave: number): void {
   draftEl.classList.add("hidden");
+  const level = state ? LEVELS[state.level - 1] : undefined;
   title.innerHTML = '<span class="hot">FELLED</span>';
-  if (paras[0]) paras[0].innerHTML = `You survived to <b>wave ${wave}</b>.<br><br>Stillness is the commitment.`;
+  if (paras[0])
+    paras[0].innerHTML =
+      `You fell in <b>${level?.name ?? "the field"}</b>, on wave <b>${wave} of ${TOTAL_WAVES}</b>.` +
+      `<br><br>Stillness is the commitment.`;
   if (paras[1]) paras[1].textContent = "";
   startBtn.textContent = "AGAIN";
+  overlay.classList.remove("hidden");
+}
+
+function onVictory(): void {
+  draftEl.classList.add("hidden");
+  title.innerHTML = '<span class="cold">STILL</span><span class="hot">STANDING</span>';
+  if (paras[0])
+    paras[0].innerHTML =
+      `All ${LEVELS.length} lands crossed, the citadel silenced.` +
+      `<br><br>Stillness was the commitment.`;
+  if (paras[1]) paras[1].textContent = "";
+  startBtn.textContent = "MARCH AGAIN";
   overlay.classList.remove("hidden");
 }
 
@@ -121,18 +151,28 @@ function frame(now: number): void {
   lastT = now;
   if (elapsed > 0.1) elapsed = 0.1; // tab-away guard
 
-  if (state && state.phase !== "dead") {
+  if (state && state.phase !== "dead" && state.phase !== "victory") {
     acc += elapsed;
     while (acc >= DT) {
       tick(state, input.frame());
       renderer.consume(state.events);
       for (const ev of state.events) {
-        if (ev.kind === "waveStarted") waveLabel.textContent = `WAVE ${ev.wave}`;
-        if (ev.kind === "playerHit" || ev.kind === "upgradeTaken") {
+        if (ev.kind === "waveStarted") waveLabel.textContent = `WAVE ${ev.wave}/${TOTAL_WAVES}`;
+        if (ev.kind === "levelStarted") {
+          const def = LEVELS[ev.level - 1];
+          if (def) {
+            renderer.setLevel(def.theme, ev.level);
+            showBanner(ev.level, def.name);
+          }
+        }
+        // Hearts can change on hit, on a vitality pick, and on the +1 respite
+        // when a new level starts.
+        if (ev.kind === "playerHit" || ev.kind === "upgradeTaken" || ev.kind === "levelStarted") {
           hearts.textContent = "\u2665 ".repeat(Math.max(0, state.player.hp)).trim();
         }
         if (ev.kind === "draftOffered") showDraft(ev.options, state.taken, ev.remaining);
         if (ev.kind === "gameOver") onGameOver(ev.wave);
+        if (ev.kind === "victory") onVictory();
       }
       acc -= DT;
     }
