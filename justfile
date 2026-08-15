@@ -16,9 +16,9 @@ icons:
 preview: build
     npm run preview
 
-# Simulate 200 headless games and print survival stats (placeholder until bots exist)
+# Print the headless survival curve (bot policies x seeds). Read before/after balance changes.
 sim-bench:
-    npx vitest run test/determinism.test.ts
+    npx vitest run test/bots/bench.test.ts
 
 deploy: build
     @echo "Pushed to main -> GitHub Actions deploys to Pages (see .github/workflows/deploy.yml)"
